@@ -1,0 +1,248 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "3D DAM daemon",
+    "version": "0.1.0",
+    "description": "Local daemon API. Binds 127.0.0.1:8765 only. JSON is snake_case, timestamps are integer Unix epoch seconds, ids are integers (App ids are strings). Every non-2xx JSON response uses the Error envelope.\n\nWebSocket: ws://127.0.0.1:8765/ws/events, server to client only. Each message is an Event (see components.schemas.Event). type is one of asset.added, asset.updated, asset.removed, conversion.started, conversion.done, conversion.failed. data is always the full Asset (last known state for asset.removed; status converting for conversion.started; status failed with error for conversion.failed). Events are not replayed; clients refetch GET /assets on reconnect."
+  },
+  "servers": [{ "url": "http://127.0.0.1:8765/api" }],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "responses": {
+          "200": {
+            "description": "Daemon is up",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Health" } } }
+          }
+        }
+      }
+    },
+    "/libraries": {
+      "get": {
+        "operationId": "listLibraries",
+        "responses": {
+          "200": {
+            "description": "All registered libraries",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Library" } } } }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createLibrary",
+        "description": "Registers a folder and starts its initial scan. Path is resolved, made absolute and forward-slash normalized before storing.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LibraryCreate" } } }
+        },
+        "responses": {
+          "201": {
+            "description": "Library created; scan started",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Library" } } }
+          },
+          "409": { "$ref": "#/components/responses/Conflict" },
+          "422": { "$ref": "#/components/responses/Invalid" }
+        }
+      }
+    },
+    "/libraries/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "delete": {
+        "operationId": "deleteLibrary",
+        "description": "Removes index rows for the library. Never touches user files.",
+        "responses": {
+          "204": { "description": "Deleted" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/assets": {
+      "get": {
+        "operationId": "listAssets",
+        "parameters": [
+          { "name": "library_id", "in": "query", "schema": { "type": "integer" } },
+          { "name": "q", "in": "query", "description": "Case-insensitive substring match on name", "schema": { "type": "string" } },
+          { "name": "ext", "in": "query", "description": "Lowercase extension without dot, e.g. blend", "schema": { "type": "string" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "minimum": 1, "maximum": 500, "default": 100 } },
+          { "name": "offset", "in": "query", "schema": { "type": "integer", "minimum": 0, "default": 0 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Page of assets ordered by name, then id",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/AssetPage" } } }
+          },
+          "422": { "$ref": "#/components/responses/Invalid" }
+        }
+      }
+    },
+    "/assets/{id}": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "get": {
+        "operationId": "getAsset",
+        "responses": {
+          "200": {
+            "description": "Asset",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Asset" } } }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/assets/{id}/thumbnail": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/CacheBust" }],
+      "get": {
+        "operationId": "getAssetThumbnail",
+        "description": "blend: embedded preview extracted at index time (128x128), or a Blender thumbnail-only render when the file has none. obj/fbx: Blender render. Other exts: 404.",
+        "responses": {
+          "200": { "description": "Thumbnail", "content": { "image/png": { "schema": { "type": "string", "contentMediaType": "image/png" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/assets/{id}/proxy": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/CacheBust" }],
+      "get": {
+        "operationId": "getAssetProxy",
+        "description": "Only obj and fbx get a proxy. blend and all other exts: 404.",
+        "responses": {
+          "200": { "description": "Decimated GLB proxy", "content": { "model/gltf-binary": { "schema": { "type": "string", "contentMediaType": "model/gltf-binary" } } } },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/assets/{id}/convert": {
+      "parameters": [{ "$ref": "#/components/parameters/Id" }],
+      "post": {
+        "operationId": "convertAsset",
+        "description": "Re-runs preview routing: blend re-extracts the embedded preview (Blender thumbnail-only job if none); obj/fbx queue a full Blender job. Blender jobs report via conversion.* events. Other exts: 409 UNSUPPORTED.",
+        "responses": {
+          "202": { "description": "Queued" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Unsupported" }
+        }
+      }
+    },
+    "/apps": {
+      "get": {
+        "operationId": "listApps",
+        "responses": {
+          "200": {
+            "description": "Detected DCC executables",
+            "content": { "application/json": { "schema": { "type": "array", "items": { "$ref": "#/components/schemas/App" } } } }
+          }
+        }
+      }
+    },
+    "/launch": {
+      "post": {
+        "operationId": "launch",
+        "description": "Opens the asset in the app via subprocess.Popen with an argv list. asset_id must exist and app_id must come from GET /apps and list the asset's ext.",
+        "requestBody": {
+          "required": true,
+          "content": { "application/json": { "schema": { "$ref": "#/components/schemas/LaunchRequest" } } }
+        },
+        "responses": {
+          "202": { "description": "Process started" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "409": { "$ref": "#/components/responses/Unsupported" },
+          "422": { "$ref": "#/components/responses/Invalid" },
+          "500": { "$ref": "#/components/responses/LaunchFailed" }
+        }
+      }
+    }
+  },
+  "components": {
+    "parameters": {
+      "Id": { "name": "id", "in": "path", "required": true, "schema": { "type": "integer" } },
+      "CacheBust": { "name": "v", "in": "query", "required": false, "description": "Browser cache-buster; clients send the asset mtime. Ignored by the server.", "schema": { "type": "string" } }
+    },
+    "responses": {
+      "NotFound": { "description": "NOT_FOUND", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Conflict": { "description": "ALREADY_EXISTS", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Invalid": { "description": "VALIDATION_ERROR or INVALID_PATH", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "Unsupported": { "description": "UNSUPPORTED", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } },
+      "LaunchFailed": { "description": "LAUNCH_FAILED", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "required": ["error"],
+        "properties": {
+          "error": {
+            "type": "object",
+            "required": ["code", "message"],
+            "properties": {
+              "code": { "type": "string", "enum": ["VALIDATION_ERROR", "INVALID_PATH", "NOT_FOUND", "ALREADY_EXISTS", "UNSUPPORTED", "LAUNCH_FAILED", "INTERNAL"] },
+              "message": { "type": "string" }
+            }
+          }
+        }
+      },
+      "Health": {
+        "type": "object",
+        "required": ["status", "version"],
+        "properties": { "status": { "const": "ok" }, "version": { "type": "string" } }
+      },
+      "Library": {
+        "type": "object",
+        "required": ["id", "path", "created_at"],
+        "properties": { "id": { "type": "integer" }, "path": { "type": "string" }, "created_at": { "type": "integer" } }
+      },
+      "LibraryCreate": {
+        "type": "object",
+        "required": ["path"],
+        "properties": { "path": { "type": "string", "minLength": 1 } }
+      },
+      "AssetStatus": { "type": "string", "enum": ["pending", "converting", "ready", "failed", "unsupported"] },
+      "Asset": {
+        "type": "object",
+        "required": ["id", "library_id", "path", "name", "ext", "size", "mtime", "dcc_version", "status", "poly_count", "error", "has_thumbnail", "has_proxy"],
+        "properties": {
+          "id": { "type": "integer" },
+          "library_id": { "type": "integer" },
+          "path": { "type": "string" },
+          "name": { "type": "string" },
+          "ext": { "type": "string", "description": "Lowercase, no dot" },
+          "size": { "type": "integer" },
+          "mtime": { "type": "integer" },
+          "dcc_version": { "type": ["string", "null"], "description": "Version parsed from the file header, e.g. 4.2" },
+          "status": { "$ref": "#/components/schemas/AssetStatus" },
+          "poly_count": { "type": ["integer", "null"], "description": "From Blender meta. null for blend previews taken from the embedded thumbnail" },
+          "error": { "type": ["string", "null"] },
+          "has_thumbnail": { "type": "boolean", "description": "true once ready for blend, obj, fbx" },
+          "has_proxy": { "type": "boolean", "description": "Only ever true for obj and fbx; blend is image-only" }
+        }
+      },
+      "AssetPage": {
+        "type": "object",
+        "required": ["items", "total"],
+        "properties": { "items": { "type": "array", "items": { "$ref": "#/components/schemas/Asset" } }, "total": { "type": "integer" } }
+      },
+      "App": {
+        "type": "object",
+        "required": ["id", "name", "version", "executable", "exts"],
+        "properties": {
+          "id": { "type": "string", "description": "e.g. blender-4.2" },
+          "name": { "type": "string" },
+          "version": { "type": ["string", "null"] },
+          "executable": { "type": "string" },
+          "exts": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "LaunchRequest": {
+        "type": "object",
+        "required": ["asset_id", "app_id"],
+        "properties": { "asset_id": { "type": "integer" }, "app_id": { "type": "string" } }
+      },
+      "Event": {
+        "type": "object",
+        "required": ["type", "asset_id", "data"],
+        "properties": {
+          "type": { "type": "string", "enum": ["asset.added", "asset.updated", "asset.removed", "conversion.started", "conversion.done", "conversion.failed"] },
+          "asset_id": { "type": "integer" },
+          "data": { "$ref": "#/components/schemas/Asset" }
+        }
+      }
+    }
+  }
+}
