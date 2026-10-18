@@ -8,3 +8,4 @@ tests/fixtures/out/
 test-results/
 playwright-report/
 .claude/settings.local.json
+release/

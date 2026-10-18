@@ -70,7 +70,7 @@ export function App() {
   return (
     <div className="min-h-screen">
       <header className="sticky top-0 z-40 flex flex-wrap items-center gap-2 border-b border-neutral-800 bg-neutral-950/95 px-4 py-3 text-sm backdrop-blur">
-        <h1 className="mr-2 font-semibold">3D DAM</h1>
+        <h1 className="mr-2 font-semibold">Blendex</h1>
         <select
           aria-label="Library"
           className="rounded bg-neutral-800 px-2 py-1"

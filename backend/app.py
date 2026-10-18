@@ -6,6 +6,7 @@ from pathlib import Path
 from fastapi import FastAPI, Query, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
@@ -13,7 +14,7 @@ from . import bridge, db, dcc
 from .indexer import CONVERTIBLE, PROXY_EXTS, Indexer
 from .worker import Worker
 
-VERSION = "0.1.0"
+VERSION = "1.0.0"
 
 
 class ApiError(Exception):
@@ -38,7 +39,7 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
 
 
-def create_app(db_path: str | None = None) -> FastAPI:
+def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         s = app.state
@@ -254,6 +255,8 @@ def create_app(db_path: str | None = None) -> FastAPI:
             task.cancel()
             app.state.clients.discard(q)
 
+    if web_dir and (Path(web_dir) / "index.html").is_file():
+        app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
     return app
 
 
