@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Questions and ideas
+    url: https://github.com/g-s-jithesh/blendex/discussions
+    about: Ask questions, share ideas, or show what you made in Discussions.
+  - name: Report a security vulnerability
+    url: https://github.com/g-s-jithesh/blendex/security/advisories/new
+    about: Report security problems privately, not in public issues.

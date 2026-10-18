@@ -3,3 +3,4 @@ uvicorn[standard]
 watchdog
 httpx
 pytest
+ruff==0.17.1

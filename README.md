@@ -1,5 +1,9 @@
 # Blendex
 
+[![CI](https://github.com/g-s-jithesh/blendex/actions/workflows/ci.yml/badge.svg)](https://github.com/g-s-jithesh/blendex/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/g-s-jithesh/blendex)](https://github.com/g-s-jithesh/blendex/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 A lightweight 3D asset manager for Windows. Point it at your project folders and it indexes your `.blend`, `.obj`, `.fbx`, `.glb`, `.stl`, `.usd` and other 3D files, shows a thumbnail for each, lets you orbit a 3D preview by hovering a card for 2 seconds, and opens or imports assets into Blender, including straight into the Blender project you already have open.
 
 Everything runs on your own PC. Nothing is uploaded anywhere.
@@ -155,3 +159,11 @@ Tests marked `blender` run the real Blender and are skipped if it is not install
 | `tests/` | pytest, Vitest and Playwright suites |
 
 `CLAUDE.md` describes the API contract and project rules in detail, and `PLAN.md` records decisions and progress.
+
+## Contributing
+
+Blendex is a community project, and contributions of every size are welcome: bug reports, ideas, docs and code. Start with [CONTRIBUTING.md](CONTRIBUTING.md), ask questions in [Discussions](https://github.com/g-s-jithesh/blendex/discussions), and please follow the [Code of Conduct](CODE_OF_CONDUCT.md). Report security problems privately as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE) © 2026 g-s-jithesh and Blendex contributors.
