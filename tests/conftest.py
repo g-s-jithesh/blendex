@@ -214,7 +214,8 @@ BLENDERS = sorted((a for a in dcc.detect_apps() if "blend" in a["exts"]), key=dc
 BLENDER = BLENDERS[-1]["executable"] if BLENDERS else None
 FIXTURES = ROOT / "tests" / "fixtures" / "out"
 FIXTURE_NAMES = ["preview.blend", "preview_zstd.blend", "nopreview.blend", "camera.blend", "empty_scene.blend",
-                 "suzanne.obj", "suzanne.fbx", "truncated.blend", "empty.blend"]
+                 "suzanne.obj", "suzanne.fbx", "truncated.blend", "empty.blend", "edit_mode.blend",
+                 "sculpt_mode.blend"]
 
 
 @pytest.fixture(scope="session")

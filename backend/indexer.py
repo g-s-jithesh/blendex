@@ -11,8 +11,8 @@ from . import db
 from .blend_header import parse_blend_header
 
 EXTS = {"blend", "ma", "mb", "fbx", "obj", "glb", "gltf", "usd", "usda", "usdc", "usdz", "abc", "stl", "ply"}
-PROXY_EXTS = {"obj", "fbx"}
-CONVERTIBLE = {"blend"} | PROXY_EXTS
+PROXY_EXTS = {"blend", "obj", "fbx"}
+CONVERTIBLE = PROXY_EXTS
 DEBOUNCE = 0.5
 
 

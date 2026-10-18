@@ -116,6 +116,8 @@ def export_glb(meshes: list, path: str) -> None:
 
 def run(args: argparse.Namespace, meta: dict) -> None:
     load_input(args.input)
+    if bpy.context.object and bpy.context.object.mode != "OBJECT":
+        bpy.ops.object.mode_set(mode="OBJECT")
     scene = bpy.context.scene
     view_layer = bpy.context.view_layer
     meshes = [o for o in scene.objects if o.type == "MESH" and o.visible_get(view_layer=view_layer)]
@@ -128,8 +130,7 @@ def run(args: argparse.Namespace, meta: dict) -> None:
     lo, hi = world_bounds(meshes, depsgraph)
     meta["bounds"] = {"min": list(lo), "max": list(hi)}
 
-    if scene.camera is None:
-        frame_camera(scene, lo, hi)
+    frame_camera(scene, lo, hi)
     render_thumbnail(scene, args.thumb_size, args.out_png)
 
     if args.out_glb:

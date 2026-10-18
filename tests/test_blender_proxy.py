@@ -97,7 +97,7 @@ def test_fixtures_have_expected_previews_and_headers(real_fixtures):
         assert read_embedded_preview(str(real_fixtures / name)) is None, name
 
 
-@pytest.mark.parametrize("name", ["suzanne.obj", "suzanne.fbx"])
+@pytest.mark.parametrize("name", ["suzanne.obj", "suzanne.fbx", "edit_mode.blend", "sculpt_mode.blend"])
 def test_full_proxy(real_fixtures, tmp_path, name):
     rc, meta, out = run_script(copy_in(real_fixtures, name, tmp_path), tmp_path, glb=True)
     assert rc == 0, meta
@@ -166,29 +166,22 @@ def test_real_daemon_end_to_end(real_fixtures, real_daemon, tmp_path):
     drain(app, c)
     got = by_name(c)
     p, n, o = got["preview.blend"], got["nopreview.blend"], got["suzanne.obj"]
-    assert p | {"status": "ready", "has_thumbnail": True, "has_proxy": False, "poly_count": None, "error": None,
-                "dcc_version": "5.2"} == p
-    assert n | {"status": "ready", "has_thumbnail": True, "has_proxy": False, "poly_count": SUZANNE_TRIS,
-                "error": None, "dcc_version": "5.2"} == n
-    assert o | {"status": "ready", "has_thumbnail": True, "has_proxy": True, "poly_count": SUZANNE_TRIS,
-                "error": None} == o
-
-    assert decode_png(c.get(f"/api/assets/{p['id']}/thumbnail").content)[:2] == (128, 128)
-    assert png_dims(c.get(f"/api/assets/{n['id']}/thumbnail", params={"v": n["mtime"]}).content) == (512, 512)
-    assert png_dims(c.get(f"/api/assets/{o['id']}/thumbnail").content) == (512, 512)
-    r = c.get(f"/api/assets/{o['id']}/proxy", params={"v": o["mtime"]})
-    assert r.headers["content-type"] == "model/gltf-binary"
-    glb_json(r.content)
-    for a in (p, n):
-        assert c.get(f"/api/assets/{a['id']}/proxy").status_code == 404
+    for a, tris in ((p, 12), (n, SUZANNE_TRIS), (o, SUZANNE_TRIS)):
+        assert a | {"status": "ready", "has_thumbnail": True, "has_proxy": True, "poly_count": tris,
+                    "error": None} == a
+        assert png_dims(c.get(f"/api/assets/{a['id']}/thumbnail", params={"v": a["mtime"]}).content) == (512, 512)
+        r = c.get(f"/api/assets/{a['id']}/proxy", params={"v": a["mtime"]})
+        assert r.headers["content-type"] == "model/gltf-binary"
+        glb_json(r.content)
+    assert p["dcc_version"] == n["dcc_version"] == "5.2"
 
     by_input = {Path(argv[argv.index("--input") + 1]).name: argv for argv in calls}
-    assert sorted(by_input) == ["nopreview.blend", "suzanne.obj"] and len(calls) == 2
-    for name, argv in by_input.items():
+    assert sorted(by_input) == sorted(names) and len(calls) == 3
+    for argv in by_input.values():
         assert argv[:8] == [BLENDER, "-b", "--factory-startup", "--python-exit-code", "1",
                             "-P", SCRIPT, "--"]
-        assert ("--out-glb" in argv) == (name == "suzanne.obj")
+        assert "--out-glb" in argv
     cache = sorted(f.name for f in (lib / ".cache").iterdir())
-    assert cache == sorted([f"{p['id']}.png", f"{n['id']}.png", f"{o['id']}.png", f"{o['id']}.glb"])
+    assert cache == sorted(f"{a['id']}.{e}" for a in (p, n, o) for e in ("png", "glb"))
     assert {name: md5(lib / name) for name in names} == sums
     assert no_fake_procs(timeout=30, image="blender%", needle="blender_export_proxy")

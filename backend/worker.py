@@ -52,8 +52,6 @@ def write_embedded_preview(src: str, library_path: str, asset_id: int) -> bool:
     tmp = None
     try:
         cache = cache_dir(library_path)
-        with contextlib.suppress(FileNotFoundError):
-            os.remove(cache / f"{asset_id}.glb")
         if not (preview := read_embedded_preview(src)):
             return False
         tmp = cache / f"{asset_id}.{secrets.token_hex(4)}.tmp.png"
@@ -109,18 +107,16 @@ class Worker:
         asset = db.get_asset(self.conn, asset_id)
         if not asset or asset["ext"] not in CONVERTIBLE:
             return
-        inline = False
         if asset["ext"] == "blend":
             vid = db.current_version_id(self.conn, asset_id)
             lib_path = db.get_library(self.conn, asset["library_id"])["path"]
-            inline = await asyncio.to_thread(write_embedded_preview, asset["path"], lib_path, asset_id)
-            if inline and db.current_version_id(self.conn, asset_id) == vid:
-                db.set_result(self.conn, vid, None, None, False)
+            shown = await asyncio.to_thread(write_embedded_preview, asset["path"], lib_path, asset_id)
+            if shown and db.current_version_id(self.conn, asset_id) == vid:
+                db.set_thumbnail(self.conn, vid)
                 self.conn.commit()
         if event:
             self.publish(event, db.get_asset(self.conn, asset_id))
-        if not inline:
-            self.enqueue(asset_id)
+        self.enqueue(asset_id)
 
     async def _loop(self) -> None:
         while True:

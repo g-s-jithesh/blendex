@@ -10,7 +10,7 @@ Local-first asset manager for 3D project folders. A React UI talks to a local Py
 | 3D preview | three.js via `@react-three/fiber` + `@react-three/drei` |
 | Backend | Python 3.11+, FastAPI, uvicorn, `watchdog` |
 | Database | SQLite via stdlib `sqlite3` (no ORM) |
-| Conversion | `.blend` previews from the embedded thumbnail (no Blender); Blender headless (`blender -b --factory-startup --python-exit-code 1 -P scripts/blender_export_proxy.py -- --input <file> <args>`) for obj/fbx proxies and the `.blend` no-preview fallback. Min Blender 4.2; dev machine has only 5.2.2 LTS. Maya launch-only for now (not installed on dev machine) |
+| Conversion | Blender headless (`blender -b --factory-startup --python-exit-code 1 -P scripts/blender_export_proxy.py -- --input <file> <args>`) builds the thumbnail + GLB proxy for blend/obj/fbx; `.blend` files also show their embedded thumbnail instantly while that job runs. Min Blender 4.2; dev machine has only 5.2.2 LTS. Maya launch-only for now (not installed on dev machine) |
 | Tests | `pytest` (backend, parsers, scripts), `vitest` (frontend logic) |
 | Desktop shell | None in Phases 1–4: browser-served dev build, Vite dev server proxies `/api` and `/ws` to the daemon. Shell choice deferred (`PLAN.md` → Decisions) |
 
@@ -69,7 +69,7 @@ blender -b --factory-startup --python-exit-code 1 -P scripts/blender_export_prox
   --input <file.blend|.obj|.fbx> --out-png <path> --out-meta <path> [--out-glb <path>] [--decimate 0.5] [--thumb-size 512]
 ```
 
-No `--out-glb` = thumbnail-only mode. `.blend` is opened with `open_mainfile(load_ui=False)`; obj/fbx are imported into the empty factory scene. The thumbnail uses the scene camera when one exists, else a framed 3/4 view.
+No `--out-glb` = thumbnail-only mode. `.blend` is opened with `open_mainfile(load_ui=False)`; obj/fbx are imported into the empty factory scene. Any edit/sculpt/pose mode is switched to object mode after loading. The thumbnail always uses a temporary 3/4-view camera framed on all visible meshes; the scene camera is ignored (workfile cameras often point away from the mesh).
 Exit code 0 = success, non-zero = failure. Always writes `--out-meta` (also on failure, when possible):
 `{"ok": bool, "blender_version": "4.2.0", "poly_count": int|null, "proxy_poly_count": int|null, "bounds": {"min": [x,y,z], "max": [x,y,z]}|null, "thumb_size": int, "error": str|null}`.
 `proxy_poly_count` is `null` in thumbnail-only mode. The backend reads the meta file, never Blender's stdout.
@@ -78,13 +78,13 @@ Exit code 0 = success, non-zero = failure. Always writes `--out-meta` (also on f
 
 | ext | Preview | Result |
 |---|---|---|
-| `blend` | Embedded thumbnail (`TEST` block, byte rules in `docs/blend_header_spec.md`) extracted by the indexer, written as `.cache/<id>.png` (temp + `os.replace`). No Blender process | `ready`, `has_thumbnail` true, `has_proxy` false, `poly_count` null |
-| `blend`, no/unparseable preview | Thumbnail-only Blender job | `ready`, `has_thumbnail` true, `has_proxy` false, `poly_count` from meta |
+| `blend` | Embedded thumbnail (`TEST` block, byte rules in `docs/blend_header_spec.md`) extracted inline as `.cache/<id>.png` (temp + `os.replace`), then a full Blender job replaces it | instantly `pending` + `has_thumbnail` true; after the job `ready`, `has_thumbnail` + `has_proxy` true, `poly_count` from meta |
+| `blend`, no/unparseable preview | Full Blender job only | `ready`, `has_thumbnail` + `has_proxy` true, `poly_count` from meta |
 | `obj`, `fbx` | Full Blender job: thumbnail + decimated Draco GLB | `ready`, `has_thumbnail` + `has_proxy` true, `poly_count` from meta |
 | other indexed exts | none | `unsupported` |
 
-- `.blend` is never a 3D proxy. The hover 3D viewport opens only when `has_proxy` is true; otherwise the card shows its thumbnail.
-- Inline extraction emits only `asset.added` / `asset.updated` (already `ready`); `conversion.*` events are for Blender jobs. `POST /convert` re-runs the same routing.
+- The hover 3D viewport opens only when `has_proxy` is true; until the job finishes a `.blend` card shows its embedded thumbnail.
+- Inline extraction emits `asset.added` / `asset.updated` (still `pending`), then the job emits `conversion.*`. `POST /convert` re-runs the same routing. On startup, `.blend` assets that are `ready` without a proxy (indexed under the earlier image-only rule) are re-queued once.
 - Clients request `/thumbnail?v=<mtime>` and `/proxy?v=<mtime>` to bust browser caches on save; the backend ignores `v`.
 - "Open in Blender" stays `blend`-only.
 

@@ -104,12 +104,13 @@ def test_initial_scan_inserts_rows(daemon, lib, spawn_log):
         st = os.stat(a["path"])
         assert (a["size"], a["mtime"]) == (st.st_size, int(st.st_mtime))
     assert sorted(spawned(spawn_log)) == sorted(
-        [(n, "thumb") for n in ("a.blend", "Upper.BLEND", "c.blend", "g.blend", "junk.blend", "empty.blend")]
+        [(n, "full") for n in ("a.blend", "Upper.BLEND", "c.blend", "g.blend", "junk.blend", "empty.blend",
+                               "p.blend")]
         + [("d.obj", "full"), ("e.fbx", "full")])
     flags = {k: (v["status"], v["has_thumbnail"], v["has_proxy"]) for k, v in got.items()}
-    assert flags == {k: ("unsupported", False, False) if k == "f.stl" else ("ready", True, not k.endswith(".blend"))
+    assert flags == {k: ("unsupported", False, False) if k == "f.stl" else ("ready", True, True)
                      for k in got}
-    assert got["p.blend"]["poly_count"] is None and got["a.blend"]["poly_count"] == 1234
+    assert got["p.blend"]["poly_count"] == got["a.blend"]["poly_count"] == 1234
     for k, v in got.items():
         assert (lib / ".cache" / f"{v['id']}.glb").exists() == v["has_proxy"], k
 
@@ -150,7 +151,7 @@ def test_watcher_ignores_cache_and_hidden_paths(daemon, lib):
         add_library(c, lib)
         drain(app, c)
         aid = items(c)[0]["id"]
-        assert (lib / ".cache" / f"{aid}.png").is_file() and not (lib / ".cache" / f"{aid}.glb").exists()
+        assert (lib / ".cache" / f"{aid}.png").is_file() and (lib / ".cache" / f"{aid}.glb").is_file()
         for rel in IGNORED:
             write(lib / rel, blend("4.2"))
         write(lib / "zz_marker.obj", b"o")

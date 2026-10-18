@@ -31,6 +31,10 @@ save("nopreview.blend", "NONE")
 bpy.ops.wm.obj_export(filepath=os.path.join(out, "suzanne.obj"), export_selected_objects=True,
                       export_materials=False)
 bpy.ops.export_scene.fbx(filepath=os.path.join(out, "suzanne.fbx"), use_selection=True)
+for mode in ("EDIT", "SCULPT"):
+    bpy.ops.object.mode_set(mode=mode)
+    save(f"{mode.lower()}_mode.blend")
+    bpy.ops.object.mode_set(mode="OBJECT")
 
 remove("MESH")
 save("empty_scene.blend")

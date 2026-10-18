@@ -92,7 +92,7 @@
       "parameters": [{ "$ref": "#/components/parameters/Id" }, { "$ref": "#/components/parameters/CacheBust" }],
       "get": {
         "operationId": "getAssetThumbnail",
-        "description": "blend: embedded preview extracted at index time (128x128), or a Blender thumbnail-only render when the file has none. obj/fbx: Blender render. Other exts: 404.",
+        "description": "blend: embedded preview extracted at index time (128x128) until the Blender job replaces it with a 512px render. obj/fbx: Blender render. Other exts: 404.",
         "responses": {
           "200": { "description": "Thumbnail", "content": { "image/png": { "schema": { "type": "string", "contentMediaType": "image/png" } } } },
           "404": { "$ref": "#/components/responses/NotFound" }
@@ -114,7 +114,7 @@
       "parameters": [{ "$ref": "#/components/parameters/Id" }],
       "post": {
         "operationId": "convertAsset",
-        "description": "Re-runs preview routing: blend re-extracts the embedded preview (Blender thumbnail-only job if none); obj/fbx queue a full Blender job. Blender jobs report via conversion.* events. Other exts: 409 UNSUPPORTED.",
+        "description": "Re-runs preview routing: blend re-extracts the embedded preview, then blend/obj/fbx queue a full Blender job. Blender jobs report via conversion.* events. Other exts: 409 UNSUPPORTED.",
         "responses": {
           "202": { "description": "Queued" },
           "404": { "$ref": "#/components/responses/NotFound" },
@@ -207,10 +207,10 @@
           "mtime": { "type": "integer" },
           "dcc_version": { "type": ["string", "null"], "description": "Version parsed from the file header, e.g. 4.2" },
           "status": { "$ref": "#/components/schemas/AssetStatus" },
-          "poly_count": { "type": ["integer", "null"], "description": "From Blender meta. null for blend previews taken from the embedded thumbnail" },
+          "poly_count": { "type": ["integer", "null"], "description": "From Blender meta. null until the Blender job finishes" },
           "error": { "type": ["string", "null"] },
           "has_thumbnail": { "type": "boolean", "description": "true once ready for blend, obj, fbx" },
-          "has_proxy": { "type": "boolean", "description": "Only ever true for obj and fbx; blend is image-only" }
+          "has_proxy": { "type": "boolean", "description": "True once a Blender job has produced a GLB proxy (blend, obj, fbx)" }
         }
       },
       "AssetPage": {

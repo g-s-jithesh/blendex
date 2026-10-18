@@ -137,7 +137,7 @@ def remove_assets(conn: sqlite3.Connection, under: str) -> list[dict]:
 def reroute_ids(conn: sqlite3.Connection, library_id: int) -> list[int]:
     rows = conn.execute(
         "SELECT a.id FROM assets a JOIN versions v ON v.id = a.current_version_id WHERE a.library_id = ?"
-        " AND (v.status IN ('pending', 'converting') OR (a.ext = 'blend' AND v.has_proxy = 1))",
+        " AND (v.status IN ('pending', 'converting') OR (a.ext = 'blend' AND v.status = 'ready' AND v.has_proxy = 0))",
         (library_id,),
     )
     return [r[0] for r in rows]
@@ -154,6 +154,10 @@ def set_result(conn: sqlite3.Connection, version_id: int, poly_count: int | None
         " has_thumbnail = 1, has_proxy = ? WHERE id = ?",
         (poly_count, proxy_poly_count, int(has_proxy), version_id),
     )
+
+
+def set_thumbnail(conn: sqlite3.Connection, version_id: int) -> None:
+    conn.execute("UPDATE versions SET has_thumbnail = 1 WHERE id = ?", (version_id,))
 
 
 def clear_cache_flags(conn: sqlite3.Connection, version_id: int) -> None:

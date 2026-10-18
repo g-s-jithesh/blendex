@@ -48,7 +48,7 @@ def test_shutdown_mid_flight_kills_every_process(daemon, lib, monkeypatch, spawn
     with daemon() as (app, c):
         drain(app, c)
         assert {a["status"] for a in items(c)} == {"ready"}
-    assert spawns(spawn_log) == 28 and {mode for _, mode in spawned(spawn_log)} == {"thumb"}
+    assert spawns(spawn_log) == 28 and {mode for _, mode in spawned(spawn_log)} == {"full"}
     assert no_fake_procs() and temp_files(lib) == []
 
 
@@ -77,7 +77,7 @@ def test_reads_never_spawn_conversions(daemon, lib, monkeypatch, spawn_log):
         drain(app, c)
         got = by_name(c)
         aid, pid, oid = got["a.blend"]["id"], got["p.blend"]["id"], got["m.obj"]["id"]
-        assert sorted(spawned(spawn_log)) == [("a.blend", "thumb"), ("m.obj", "full")]
+        assert sorted(spawned(spawn_log)) == [("a.blend", "full"), ("m.obj", "full"), ("p.blend", "full")]
         gets = [r.path for r in app.routes if "GET" in getattr(r, "methods", ()) and r.path.startswith("/api")]
         for _ in range(10):
             for path in gets:
@@ -88,18 +88,16 @@ def test_reads_never_spawn_conversions(daemon, lib, monkeypatch, spawn_log):
             with c.websocket_connect("/ws/events"):
                 pass
         drain(app, c)
-        assert spawns(spawn_log) == 2
+        assert spawns(spawn_log) == 3
 
         for f in (lib / ".cache").iterdir():
             f.unlink()
         for _ in range(10):
-            for i in (aid, pid):
-                assert c.get(f"/api/assets/{i}/proxy").status_code == 404
             for i in (aid, pid, oid):
+                assert c.get(f"/api/assets/{i}/proxy").status_code in (200, 404)
                 assert c.get(f"/api/assets/{i}/thumbnail").status_code in (200, 404)
-            assert c.get(f"/api/assets/{oid}/proxy").status_code in (200, 404)
         drain(app, c)
-        assert sorted(spawned(spawn_log)[2:]) == [("a.blend", "thumb"), ("m.obj", "full")]
+        assert sorted(spawned(spawn_log)[3:]) == [("a.blend", "full"), ("m.obj", "full"), ("p.blend", "full")]
         assert {a["status"] for a in items(c)} == {"ready"}
         assert c.get(f"/api/assets/{oid}/proxy").status_code == 200
         for i in (aid, pid, oid):
@@ -113,7 +111,7 @@ def test_reads_never_spawn_conversions(daemon, lib, monkeypatch, spawn_log):
             time.sleep(0.05)
         assert c.get(f"/api/assets/{oid}").json()["status"] in ("pending", "converting")
         drain(app, c)
-        assert spawned(spawn_log)[4:] == [("m.obj", "full")]
+        assert spawned(spawn_log)[6:] == [("m.obj", "full")]
         assert c.get(f"/api/assets/{oid}/proxy").status_code == 200
     assert no_fake_procs()
 

@@ -115,6 +115,8 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 
 | 2026-10-18 | Lowest verified Blender is 5.2.2 LTS; proxy script sets `media_type` only on ≥ 5.0; `.blend` opened with `use_scripts=False`; meta `blender_version` is `X.Y.Z` without the `LTS` suffix | Researcher findings on real 5.2 runs |
 | 2026-10-18 | Embedded preview: REND → TEST → GLOB order, RGBA8 bottom-up, premultiplied alpha (un-premultiply for PNG), ≤ 512 px, ≤ 2 MiB decompressed read; big-endian / < 2.50 → no preview. zstd extraction only on Python ≥ 3.14, else Blender fallback | `docs/blend_header_spec.md` Part 2 |
+| 2026-10-18 | Reverses the Phase 5 image-only rule (user decision): `.blend` shows its embedded preview instantly, then always runs a full Blender job (512px PNG + polycount + GLB), so `.blend` cards get the hover 3D viewer. Startup re-queues `.blend` assets that are `ready` without a proxy | User chose "Full 3D for .blend" after a code review flagged missing `.blend` proxies |
+| 2026-10-18 | Proxy script switches any edit/sculpt/pose mode to object mode after load, and always frames a temporary 3/4 camera on all meshes (scene camera ignored) | Edit/sculpt/pose files failed `select_all.poll()`; workfile cameras often point away from the mesh |
 
 ## Backlog
 
@@ -148,3 +150,4 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 - 2026-10-18 [qa-tester] T24 done: make_fixtures.py builds 9 fixtures on Blender 5.2.2; 11 real-Blender tests incl. real daemon e2e (preview blend spawns 0 processes). Verify: .venv/Scripts/python -m pytest -q -rs -m blender (11 passed, 0 skipped)
 - 2026-10-18 [qa-tester] T25 done: vitest 16/16, Playwright 3/3 x2 with fully clean console; blend cards never mount a canvas or request /proxy; stress: 1 context/preview, peak 1, 0 un-lost, 0 leaked buffers/asset textures. Verify: npm --prefix frontend run test; npx --prefix tests/e2e playwright test -c tests/e2e
 - 2026-10-18 [orchestrator] T17 done: final re-run pytest 175 passed (0 skipped), vitest 16/16, build OK, ruff clean.
+- 2026-10-18 [orchestrator] Review fixes: blend full 3D (worker.route always enqueues; PROXY_EXTS += blend; db.set_thumbnail; reroute image-only blends), proxy script object-mode + always-framed camera, tests updated (+ edit/sculpt real fixtures). Scroll alignment already handled by useHoverPreview (scroll/resize cancel). Verify: .venv/Scripts/python -m pytest -q (177 passed); npm --prefix frontend run test

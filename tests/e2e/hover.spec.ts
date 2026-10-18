@@ -235,7 +235,7 @@ test("single hover mounts one context with GPU resources and releases all of it 
   expect(badLogs(log)).toEqual([]);
 });
 
-test("blend cards are image-only: thumbnail shown, no 3D badge, no canvas, no context, no proxy fetch", async ({ page }) => {
+test("cards without a proxy are image-only: thumbnail shown, no 3D badge, no canvas, no context, no proxy fetch", async ({ page }) => {
   const { log, net, centers, empty } = await setup(page);
   for (const a of ASSETS) {
     const card = page.locator(`[data-asset-id="${a.id}"]`);

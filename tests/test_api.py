@@ -1,6 +1,5 @@
 import json
 import os
-import shutil
 import sqlite3
 import struct
 import subprocess
@@ -22,7 +21,6 @@ from conftest import (
     items,
     preview_blend,
     spawned,
-    spawns,
     wait_until,
     ws_until,
 )
@@ -174,7 +172,7 @@ def test_get_asset(daemon, lib):
         assert r.status_code == 200 and r.json() == a
         assert_shape(r.json(), "Asset")
         assert a | {"ext": "blend", "name": "a", "dcc_version": "4.2", "status": "ready", "has_thumbnail": True,
-                    "has_proxy": False, "poly_count": 1234, "error": None} == a
+                    "has_proxy": True, "poly_count": 1234, "error": None} == a
         assert_error(c.get("/api/assets/999999"), 404, "NOT_FOUND")
         assert_error(c.get("/api/assets/abc"), 422, "VALIDATION_ERROR")
 
@@ -206,8 +204,9 @@ def test_conversion_end_to_end_serves_glb_and_png(daemon, lib, spawn_log):
         add_library(c, lib)
         drain(app, c)
         got = by_name(c)
-        assert sorted(spawned(spawn_log)) == [("a.blend", "thumb"), ("f.fbx", "full"), ("m.obj", "full")]
-        for name in ("m.obj", "f.fbx"):
+        assert sorted(spawned(spawn_log)) == [("a.blend", "full"), ("f.fbx", "full"), ("m.obj", "full")]
+        assert got["a.blend"]["dcc_version"] == "4.2"
+        for name in ("m.obj", "f.fbx", "a.blend"):
             a = got[name]
             assert a | {"status": "ready", "has_proxy": True, "has_thumbnail": True, "poly_count": 1234,
                         "error": None} == a
@@ -220,14 +219,8 @@ def test_conversion_end_to_end_serves_glb_and_png(daemon, lib, spawn_log):
                 assert c.get(f"/api/assets/{a['id']}/proxy", params=params).content == proxy.content
                 assert c.get(f"/api/assets/{a['id']}/thumbnail", params=params).content == thumb.content
         b = got["a.blend"]
-        assert b | {"status": "ready", "has_proxy": False, "has_thumbnail": True, "poly_count": 1234,
-                    "error": None, "dcc_version": "4.2"} == b
-        for params in V_VALUES:
-            assert_error(c.get(f"/api/assets/{b['id']}/proxy", params=params), 404, "NOT_FOUND")
-            assert c.get(f"/api/assets/{b['id']}/thumbnail", params=params).status_code == 200
         cache = lib / ".cache"
-        ids = sorted([got["m.obj"]["id"], got["f.fbx"]["id"]])
-        listing = sorted([f"{i}.{e}" for i in ids for e in ("glb", "png")] + [f"{b['id']}.png"])
+        listing = sorted(f"{a['id']}.{e}" for a in got.values() for e in ("glb", "png"))
         assert sorted(p.name for p in cache.iterdir()) == listing
         if os.name == "nt":
             assert cache.stat().st_file_attributes & 0x2, ".cache must be hidden on Windows"
@@ -236,9 +229,9 @@ def test_conversion_end_to_end_serves_glb_and_png(daemon, lib, spawn_log):
         drain(app, c)
         assert c.post(f"/api/assets/{b['id']}/convert").status_code == 202
         drain(app, c)
-        assert spawned(spawn_log)[3:] == [("m.obj", "full"), ("a.blend", "thumb")]
+        assert spawned(spawn_log)[3:] == [("m.obj", "full"), ("a.blend", "full")]
         assert sorted(p.name for p in cache.iterdir()) == listing
-        assert by_name(c)["a.blend"]["has_proxy"] is False
+        assert by_name(c)["a.blend"]["has_proxy"] is True
         assert_error(c.post("/api/assets/999999/convert"), 404, "NOT_FOUND")
 
 
@@ -257,7 +250,10 @@ def test_conversion_failure_and_unsupported(daemon, lib, monkeypatch, spawn_log)
             a = got[name]
             assert (a["status"], a["error"], a["has_proxy"], a["has_thumbnail"]) == ("failed", "fake failure", False,
                                                                                      False)
-        assert (got["p.blend"]["status"], got["p.blend"]["has_thumbnail"]) == ("ready", True)
+        p = got["p.blend"]
+        assert (p["status"], p["error"], p["has_proxy"], p["has_thumbnail"]) == ("failed", "fake failure", False, True)
+        assert c.get(f"/api/assets/{p['id']}/thumbnail").status_code == 200
+        assert_error(c.get(f"/api/assets/{p['id']}/proxy"), 404, "NOT_FOUND")
         for name in ("x.stl", "y.ma"):
             a = got[name]
             assert (a["status"], a["error"], a["has_proxy"], a["has_thumbnail"]) == ("unsupported", None, False, False)
@@ -266,8 +262,8 @@ def test_conversion_failure_and_unsupported(daemon, lib, monkeypatch, spawn_log)
             assert_error(c.get(f"/api/assets/{got[name]['id']}/proxy"), 404, "NOT_FOUND")
             assert_error(c.get(f"/api/assets/{got[name]['id']}/thumbnail"), 404, "NOT_FOUND")
         drain(app, c)
-        assert sorted(spawned(spawn_log)) == [("a.blend", "thumb"), ("m.obj", "full")]
-        assert [p.name for p in (lib / ".cache").iterdir()] == [f"{got['p.blend']['id']}.png"]
+        assert sorted(spawned(spawn_log)) == [("a.blend", "full"), ("m.obj", "full"), ("p.blend", "full")]
+        assert [f.name for f in (lib / ".cache").iterdir()] == [f"{p['id']}.png"]
 
 
 def test_no_blender_marks_failed(daemon, lib, monkeypatch):
@@ -279,53 +275,55 @@ def test_no_blender_marks_failed(daemon, lib, monkeypatch):
         add_library(c, lib)
         drain(app, c)
         got = by_name(c)
-    for name in ("a.blend", "m.obj"):
+    for name in ("a.blend", "m.obj", "p.blend"):
         assert got[name]["status"] == "failed" and "Blender" in got[name]["error"]
-    assert (got["p.blend"]["status"], got["p.blend"]["has_thumbnail"]) == ("ready", True)
+    assert got["p.blend"]["has_thumbnail"] is True
 
 
-def test_blend_with_embedded_preview_never_spawns(daemon, lib, spawn_log):
+def test_blend_embedded_preview_shows_before_full_job(daemon, lib, monkeypatch, spawn_log):
+    monkeypatch.setenv("FAKE_BLENDER_SLEEP", "3")
     sources = {"p.blend": preview_blend("v1"), "l.blend": preview_blend("legacy4"),
                "z.blend": zstd.compress(preview_blend("legacy8"))}
     for name, data in sources.items():
         write(lib / name, data)
-    with daemon() as (app, c):
-        with c.websocket_connect("/ws/events") as ws:
-            add_library(c, lib)
-            drain(app, c)
-            got = by_name(c)
-            assert {a["dcc_version"] for a in got.values()} == {"5.2", "4.4"}
-            for a in got.values():
-                assert a | {"status": "ready", "has_thumbnail": True, "has_proxy": False, "poly_count": None,
-                            "error": None} == a
-                for params in V_VALUES:
-                    r = c.get(f"/api/assets/{a['id']}/thumbnail", params=params)
-                    assert r.headers["content-type"] == "image/png"
-                    assert decode_png(r.content) == (2, 2, EXPECTED_2X2)
-                    assert_error(c.get(f"/api/assets/{a['id']}/proxy", params=params), 404, "NOT_FOUND")
-            pid = got["p.blend"]["id"]
-            assert c.post(f"/api/assets/{pid}/convert").status_code == 202
-            (lib / ".cache" / f"{pid}.png").unlink()
-            assert_error(c.get(f"/api/assets/{pid}/thumbnail"), 404, "NOT_FOUND")
-            assert decode_png(c.get(f"/api/assets/{pid}/thumbnail").content)[:2] == (2, 2)
-            shutil.rmtree(lib / ".cache")
-            assert_error(c.get(f"/api/assets/{pid}/thumbnail"), 404, "NOT_FOUND")
-            assert c.get(f"/api/assets/{pid}/thumbnail").status_code == 200
-            assert c.get(f"/api/assets/{pid}").json() == got["p.blend"]
-            write(lib / "zz_sentinel.stl")
-            events = ws_until(ws, lambda ev: any(e["data"]["name"] == "zz_sentinel" for e in ev))
-            drain(app, c)
-        assert {e["type"] for e in events} == {"asset.added", "asset.updated"}
-        assert sorted(e["data"]["name"] for e in events if e["type"] == "asset.added") == ["l", "p", "z", "zz_sentinel"]
-        for e in events:
-            assert_shape(e, "Event")
-            if e["data"]["ext"] == "blend":
-                assert e["data"]["status"] == "ready" and e["data"]["has_proxy"] is False
-        assert spawns(spawn_log) == 0
-        assert sorted(p.name for p in (lib / ".cache").iterdir()) == [f"{pid}.png"]
+    with daemon() as (app, c), c.websocket_connect("/ws/events") as ws:
+        add_library(c, lib)
+        wait_until(lambda: len(items(c)) == 3 and all(a["has_thumbnail"] for a in items(c)))
+        early = by_name(c)
+        assert {a["dcc_version"] for a in early.values()} == {"5.2", "4.4"}
+        for a in early.values():
+            assert a["status"] in ("pending", "converting") and a["has_proxy"] is False
+            for params in V_VALUES:
+                r = c.get(f"/api/assets/{a['id']}/thumbnail", params=params)
+                assert r.headers["content-type"] == "image/png"
+                assert decode_png(r.content) == (2, 2, EXPECTED_2X2)
+        drain(app, c)
+        got = by_name(c)
+        for a in got.values():
+            assert a | {"status": "ready", "has_thumbnail": True, "has_proxy": True, "poly_count": 1234,
+                        "error": None} == a
+            assert_glb(c.get(f"/api/assets/{a['id']}/proxy"))
+            assert decode_png(c.get(f"/api/assets/{a['id']}/thumbnail").content)[:2] == (1, 1)
+        pid = got["p.blend"]["id"]
+        (lib / ".cache" / f"{pid}.png").unlink()
+        assert_error(c.get(f"/api/assets/{pid}/thumbnail"), 404, "NOT_FOUND")
+        assert decode_png(c.get(f"/api/assets/{pid}/thumbnail").content) == (2, 2, EXPECTED_2X2)
+        drain(app, c)
+        assert c.get(f"/api/assets/{pid}").json()["has_proxy"] is True
+        write(lib / "zz_sentinel.stl")
+        events = ws_until(ws, lambda ev: any(e["data"]["name"] == "zz_sentinel" for e in ev))
+    added = {e["data"]["name"]: e["data"] for e in events if e["type"] == "asset.added"}
+    assert sorted(added) == ["l", "p", "z", "zz_sentinel"]
+    for n in "lpz":
+        assert (added[n]["has_thumbnail"], added[n]["has_proxy"], added[n]["status"]) == (True, False, "pending")
+    assert [e["type"] for e in events].count("conversion.done") == 4
+    for e in events:
+        assert_shape(e, "Event")
+    assert sorted(spawned(spawn_log)) == [("l.blend", "full"), ("p.blend", "full"), ("p.blend", "full"),
+                                          ("z.blend", "full")]
 
 
-def test_zstd_preview_without_decoder_falls_back_to_job(daemon, lib, monkeypatch, spawn_log):
+def test_zstd_blend_without_decoder_still_converts(daemon, lib, monkeypatch, spawn_log):
     import compression
 
     monkeypatch.delattr(compression, "zstd")
@@ -335,38 +333,29 @@ def test_zstd_preview_without_decoder_falls_back_to_job(daemon, lib, monkeypatch
         add_library(c, lib)
         drain(app, c)
         a = items(c)[0]
-    assert spawned(spawn_log) == [("z.blend", "thumb")]
-    assert a | {"status": "ready", "has_thumbnail": True, "has_proxy": False, "poly_count": 1234} == a
+    assert spawned(spawn_log) == [("z.blend", "full")]
+    assert a | {"status": "ready", "has_thumbnail": True, "has_proxy": True, "poly_count": 1234} == a
 
 
-def test_legacy_blend_glb_is_removed_on_restart(daemon, lib, spawn_log, tmp_path):
+def test_image_only_blends_get_proxies_on_restart(daemon, lib, spawn_log, tmp_path):
     write(lib / "p.blend", preview_blend())
     write(lib / "h.blend", blend("4.2"))
     with daemon() as (app, c):
         add_library(c, lib)
         drain(app, c)
-        got = by_name(c)
-    assert spawned(spawn_log) == [("h.blend", "thumb")]
-    cache = lib / ".cache"
-    for a in got.values():
-        (cache / f"{a['id']}.glb").write_bytes(b"glTF legacy")
+    assert sorted(spawned(spawn_log)) == [("h.blend", "full"), ("p.blend", "full")]
+    for f in (lib / ".cache").glob("*.glb"):
+        f.unlink()
     conn = sqlite3.connect(tmp_path / "t.sqlite")
     with conn:
-        conn.execute("UPDATE versions SET has_proxy = 1, proxy_poly_count = 5")
+        conn.execute("UPDATE versions SET has_proxy = 0, proxy_poly_count = NULL")
     conn.close()
     with daemon() as (app, c):
         drain(app, c)
-        after = by_name(c)
-        for a in after.values():
-            assert (a["status"], a["has_proxy"], a["has_thumbnail"]) == ("ready", False, True)
-            assert_error(c.get(f"/api/assets/{a['id']}/proxy"), 404, "NOT_FOUND")
-        drain(app, c)
-    assert not list(cache.glob("*.glb"))
-    conn = sqlite3.connect(tmp_path / "t.sqlite")
-    assert conn.execute("SELECT has_proxy, proxy_poly_count FROM versions v JOIN assets a"
-                        " ON a.current_version_id = v.id").fetchall() == [(0, None)] * 2
-    conn.close()
-    assert spawned(spawn_log) == [("h.blend", "thumb")] * 2
+        for a in by_name(c).values():
+            assert (a["status"], a["has_proxy"], a["has_thumbnail"]) == ("ready", True, True)
+            assert_glb(c.get(f"/api/assets/{a['id']}/proxy"))
+    assert sorted(spawned(spawn_log)) == [("h.blend", "full")] * 2 + [("p.blend", "full")] * 2
 
 
 def test_cache_serving_rejects_escapes(daemon, lib, tmp_path, monkeypatch):
