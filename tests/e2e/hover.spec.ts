@@ -191,8 +191,10 @@ async function expectReleased(page: Page) {
   return p;
 }
 
+const DRIVER_PERF_NOTE = /GL Driver Message \(\w+, Performance,/;
 const badLogs = (log: string[]) =>
-  log.filter((l) => /^\[(error|warning|pageerror)\]/.test(l) || /CONTEXT_LOST|Too many active WebGL|Context Lost/i.test(l));
+  log.filter((l) => (/^\[(error|warning|pageerror)\]/.test(l) && !DRIVER_PERF_NOTE.test(l))
+    || /CONTEXT_LOST|Too many active WebGL|Context Lost/i.test(l));
 
 async function hoverUntilLoaded(page: Page, at: Point, leaveTo: Point) {
   await page.mouse.move(at.x, at.y);
