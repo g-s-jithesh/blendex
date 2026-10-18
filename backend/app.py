@@ -1,4 +1,5 @@
 import asyncio
+import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -8,7 +9,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from pydantic import BaseModel, Field
 from starlette.exceptions import HTTPException
 
-from . import db, dcc
+from . import bridge, db, dcc
 from .indexer import CONVERTIBLE, PROXY_EXTS, Indexer
 from .worker import Worker
 
@@ -27,6 +28,10 @@ class LibraryCreate(BaseModel):
 class LaunchRequest(BaseModel):
     asset_id: int
     app_id: str
+
+
+class ImportRequest(BaseModel):
+    asset_id: int
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -188,10 +193,48 @@ def create_app(db_path: str | None = None) -> FastAPI:
         if not Path(asset["path"]).is_file():
             raise ApiError(404, "NOT_FOUND", f"file missing on disk: {asset['path']}")
         try:
-            dcc.launch(dcc_app["executable"], asset["path"])
+            dcc.launch(dcc_app, asset["path"])
         except OSError as e:
             raise ApiError(500, "LAUNCH_FAILED", f"{dcc_app['name']} failed to start: {e}") from e
         return Response(status_code=202)
+
+    @app.get("/api/sessions")
+    async def list_sessions() -> list[dict]:
+        return await asyncio.to_thread(bridge.list_sessions)
+
+    @app.post("/api/sessions/{session_id}/import")
+    async def import_into_session(session_id: str, body: ImportRequest) -> dict:
+        asset = asset_or_404(body.asset_id)
+        if asset["ext"] not in bridge.IMPORT_EXTS:
+            raise ApiError(409, "UNSUPPORTED", f"Blender cannot import .{asset['ext']} files")
+        if not Path(asset["path"]).is_file():
+            raise ApiError(404, "NOT_FOUND", f"file missing on disk: {asset['path']}")
+        try:
+            imported = await asyncio.to_thread(bridge.import_into, session_id, asset["path"])
+        except LookupError as e:
+            raise ApiError(404, "NOT_FOUND", f"Blender session {session_id} is not running") from e
+        except bridge.BridgeError as e:
+            raise ApiError(502, "BRIDGE_FAILED", str(e)) from e
+        return {"imported": imported}
+
+    def blender_apps() -> list[dict]:
+        return [a for a in db.list_apps(app.state.conn) if a["id"].startswith("blender") and a["version"]]
+
+    @app.get("/api/bridges")
+    async def list_bridges() -> list[dict]:
+        return [{"app_id": a["id"], "name": a["name"], "installed": bridge.addon_path(a["version"]).is_file()}
+                for a in blender_apps()]
+
+    @app.post("/api/bridges/{app_id}", status_code=204)
+    async def install_bridge(app_id: str) -> Response:
+        target = next((a for a in blender_apps() if a["id"] == app_id), None)
+        if not target:
+            raise ApiError(404, "NOT_FOUND", f"no Blender install with id {app_id}")
+        try:
+            await asyncio.to_thread(bridge.install, target["executable"])
+        except (bridge.BridgeError, OSError, subprocess.TimeoutExpired) as e:
+            raise ApiError(502, "BRIDGE_FAILED", f"installing the bridge into {target['name']} failed: {e}") from e
+        return Response(status_code=204)
 
     @app.websocket("/ws/events")
     async def events(ws: WebSocket) -> None:

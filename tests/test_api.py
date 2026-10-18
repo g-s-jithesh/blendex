@@ -1,9 +1,11 @@
 import json
 import os
+import re
 import sqlite3
 import struct
 import subprocess
 import sys
+from pathlib import Path
 
 import pytest
 from compression import zstd
@@ -26,6 +28,7 @@ from conftest import (
 )
 
 from backend import dcc
+from backend.indexer import EXTS
 
 DOC_ROUTES = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
 
@@ -68,7 +71,7 @@ def test_every_spec_endpoint_is_routed_and_nothing_else(daemon):
         for r in app.routes:
             if r.path in DOC_ROUTES or r.path == "/ws/events":
                 continue
-            path = r.path.replace("{library_id}", "{x}").replace("{asset_id}", "{x}")
+            path = re.sub(r"\{\w+_id\}", "{x}", r.path)
             routes |= {(m, path) for m in r.methods - {"HEAD"}}
     assert routes == spec
 
@@ -410,43 +413,56 @@ def test_apps_listing(daemon, blender_install):
         r = c.get("/api/apps")
     assert r.status_code == 200
     assert_shape(r.json(), {"type": "array", "items": {"$ref": "App"}})
-    assert r.json() == [
+    blender_exts = ["blend", *dcc.BLENDER_IMPORTS]
+    assert [a for a in r.json() if a["id"].startswith("blender")] == [
         {"id": "blender-4.2", "name": "Blender 4.2", "version": "4.2", "executable": blender_install[0],
-         "exts": ["blend"]},
+         "exts": blender_exts},
         {"id": "blender-5.0", "name": "Blender 5.0", "version": "5.0", "executable": blender_install[1],
-         "exts": ["blend"]},
+         "exts": blender_exts},
     ]
+    system = [a for a in r.json() if not a["id"].startswith("blender")]
+    if sys.platform == "win32":
+        assert [(a["id"], a["exts"]) for a in system] == [("explorer", sorted(EXTS)), ("open-with", sorted(EXTS))]
+        assert all(os.path.isfile(a["executable"]) for a in system)
+    else:
+        assert system == []
 
 
-def test_apps_empty_when_nothing_detected(daemon):
+def test_apps_without_dcc_installs_only_list_system_openers(daemon):
     with daemon() as (_app, c):
-        assert c.get("/api/apps").json() == []
+        ids = [a["id"] for a in c.get("/api/apps").json()]
+    assert ids == (["explorer", "open-with"] if sys.platform == "win32" else [])
 
 
 def test_launch(daemon, lib, blender_install, popen):
     write(lib / "a.blend", blend("4.2"))
     write(lib / "m.obj")
+    write(lib / "r.ma")
     with daemon() as (app, c):
         add_library(c, lib)
         drain(app, c)
         got = by_name(c)
-        a, obj = got["a.blend"], got["m.obj"]
+        a, obj, rig = got["a.blend"], got["m.obj"], got["r.ma"]
 
         r = c.post("/api/launch", json={"asset_id": a["id"], "app_id": "blender-5.0"})
         assert r.status_code == 202 and r.content == b""
         assert len(popen) == 1
         args, kwargs = popen[0]
-        assert args == ([blender_install[1], a["path"]],)
+        assert args == ([blender_install[1], str(Path(a["path"]))],)
         assert not kwargs.get("shell") and not isinstance(args[0], str)
 
         assert_error(c.post("/api/launch", json={"asset_id": 999999, "app_id": "blender-4.2"}), 404, "NOT_FOUND")
         for app_id in ("maya-2025", "blender", "blender-4.2; calc.exe", "../blender-4.2", blender_install[0]):
             assert_error(c.post("/api/launch", json={"asset_id": a["id"], "app_id": app_id}), 404, "NOT_FOUND")
-        assert_error(c.post("/api/launch", json={"asset_id": obj["id"], "app_id": "blender-4.2"}), 409, "UNSUPPORTED")
+        assert_error(c.post("/api/launch", json={"asset_id": rig["id"], "app_id": "blender-4.2"}), 409, "UNSUPPORTED")
         for body in ({}, {"asset_id": a["id"]}, {"app_id": "blender-4.2"}, {"asset_id": "abc", "app_id": "x"},
                      {"asset_id": a["path"], "app_id": "blender-4.2"}):
             assert_error(c.post("/api/launch", json=body), 422, "VALIDATION_ERROR")
         assert len(popen) == 1
+        assert c.post("/api/launch", json={"asset_id": obj["id"], "app_id": "blender-4.2"}).status_code == 202
+        assert popen[1][0] == ([blender_install[0], "--python", str(dcc.OPEN_IMPORT_SCRIPT), "--",
+                                str(Path(obj["path"]))],)
+        del popen[1]
 
         (lib / "a.blend").unlink()
         r = c.post("/api/launch", json={"asset_id": a["id"], "app_id": "blender-4.2"})
@@ -486,7 +502,7 @@ def test_launch_with_real_popen_uses_argv_list(daemon, lib, blender_install, mon
         a = items(c)[0]
         assert c.post("/api/launch", json={"asset_id": a["id"], "app_id": "blender-4.2"}).status_code == 202
         drain(app, c)
-    assert seen[0][0] == [blender_install[0], a["path"]] and not seen[0][1].get("shell")
+    assert seen[0][0] == [blender_install[0], str(Path(a["path"]))] and not seen[0][1].get("shell")
 
 
 def test_ws_events_deliver_full_assets(daemon, lib):

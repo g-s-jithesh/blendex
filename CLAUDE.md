@@ -22,7 +22,7 @@ Do not add dependencies outside this table without an entry in `PLAN.md` → Dec
 /backend           FastAPI app, watcher, worker queue, db, launcher
   /backend/migrations   Numbered SQL files: 001_init.sql, 002_*.sql
 /frontend          React + R3F app
-/scripts           Headless DCC scripts (run inside Blender / mayapy)
+/scripts           Blender scripts: headless proxy export, open-and-import, the `dam_bridge` add-on + its installer
 /docs              api_spec.json (OpenAPI 3.1), blend_header_spec.md
 /tests             pytest suites + fixture generators
   /tests/fixtures       Generated fixtures (gitignored), never hand-committed binaries
@@ -41,7 +41,7 @@ PLAN.md            Single source of truth for phases, tasks, decisions, status
 - Daemon binds `127.0.0.1:8765` only. Never `0.0.0.0`.
 - Base URL `http://127.0.0.1:8765/api`, WebSocket `ws://127.0.0.1:8765/ws/events`.
 - All JSON uses `snake_case`. Timestamps are integer Unix epoch seconds. IDs are integers.
-- Errors: HTTP status + `{"error": {"code": "<SNAKE_CODE>", "message": "<human text>"}}`. Codes: `VALIDATION_ERROR` 422 (FastAPI's default 422 body is overridden), `INVALID_PATH` 422, `NOT_FOUND` 404, `ALREADY_EXISTS` 409, `UNSUPPORTED` 409 (ext not convertible / not opened by that app), `LAUNCH_FAILED` 500, `INTERNAL` 500.
+- Errors: HTTP status + `{"error": {"code": "<SNAKE_CODE>", "message": "<human text>"}}`. Codes: `VALIDATION_ERROR` 422 (FastAPI's default 422 body is overridden), `INVALID_PATH` 422, `NOT_FOUND` 404, `ALREADY_EXISTS` 409, `UNSUPPORTED` 409 (ext not convertible / not opened by that app), `LAUNCH_FAILED` 500, `BRIDGE_FAILED` 502 (a Blender session or bridge install failed), `INTERNAL` 500.
 - `ext` is lowercase without the dot (`blend`). `GET /assets` orders by `name, id`; `q` is a case-insensitive substring match on `name`.
 
 ### REST
@@ -59,6 +59,10 @@ PLAN.md            Single source of truth for phases, tasks, decisions, status
 | POST | `/assets/{id}/convert` | — | `202` (re-queue conversion) |
 | GET | `/apps` | — | `App[]` (detected DCC executables) |
 | POST | `/launch` | `{"asset_id": int, "app_id": str}` | `202` |
+| GET | `/sessions` | — | `Session[]` (running Blenders with the bridge; dead session files are deleted) |
+| POST | `/sessions/{id}/import` | `{"asset_id": int}` | `{"imported": str[]}` |
+| GET | `/bridges` | — | `Bridge[]` (one per detected Blender) |
+| POST | `/bridges/{app_id}` | — | `204` (installs + enables the add-on in that Blender) |
 
 `docs/api_spec.json` is the authoritative OpenAPI version of this table; keep both in sync.
 
@@ -86,7 +90,6 @@ Exit code 0 = success, non-zero = failure. Always writes `--out-meta` (also on f
 - The hover 3D viewport opens only when `has_proxy` is true; until the job finishes a `.blend` card shows its embedded thumbnail.
 - Inline extraction emits `asset.added` / `asset.updated` (still `pending`), then the job emits `conversion.*`. `POST /convert` re-runs the same routing. On startup, `.blend` assets that are `ready` without a proxy (indexed under the earlier image-only rule) are re-queued once.
 - Clients request `/thumbnail?v=<mtime>` and `/proxy?v=<mtime>` to bust browser caches on save; the backend ignores `v`.
-- "Open in Blender" stays `blend`-only.
 
 ### Shapes
 
@@ -100,7 +103,16 @@ type Asset = {
   has_thumbnail: boolean; has_proxy: boolean;
 };
 type App = { id: string; name: string; version: string | null; executable: string; exts: string[] };
+type Session = { id: string; app: string; version: string | null; pid: number; file: string | null; exts: string[] };
+type Bridge = { app_id: string; name: string; installed: boolean };
 ```
+
+### Open with / import
+
+- `/apps` lists detected Blender (`blend` opens directly; obj/fbx/glb/gltf/stl/ply/usd*/abc start a new Blender that runs `scripts/blender_open_import.py`), Maya (`ma`/`mb`, untested: not installed on the dev machine), and on Windows `explorer` (show in folder) and `open-with` (Windows app picker) for every indexed ext.
+- Importing into an already-open Blender needs the `scripts/dam_bridge.py` add-on, installed via `POST /bridges/{app_id}` (runs `scripts/install_dam_bridge.py` in that Blender, saves its user prefs). Each GUI session listens on `127.0.0.1:<random port>` and writes `<APPDATA>/dam/sessions/blender-<pid>.json` (`DAM_SESSIONS` overrides) with the port and a random token.
+- Bridge protocol: one JSON line per connection `{"token", "cmd": "info"|"import", "path"?}`, one JSON line back. Commands run on Blender's main thread via a timer; there is no command that executes code. `.blend` imports append its objects; every import is one undo step.
+- Tests that run a real Blender installer must set `BLENDER_USER_RESOURCES` to a temp dir; Blender 5.2 ignores `BLENDER_USER_CONFIG` and would rewrite the user's real preferences.
 
 ### WebSocket events (server → client only)
 
@@ -129,7 +141,8 @@ Contract changes go through the architect: update this section and `PLAN.md` →
 
 ## Security Boundaries
 
-- Subprocesses use argv lists, never `shell=True`. `/launch` only accepts an `asset_id` that exists in the DB and an `app_id` from `/apps`.
+- Subprocesses use argv lists, never `shell=True`. The only exceptions are `explorer`/`open-with`, which parse their own raw command line, so they get a string (still no shell; Windows paths cannot contain `"`). `/launch` only accepts an `asset_id` that exists in the DB and an `app_id` from `/apps`.
+- Bridge sessions bind `127.0.0.1` only, require the per-session token, accept only `info`/`import` of known 3D exts, and session ids must match `blender-<digits>` before any file lookup.
 - Header parsers read a bounded byte count and never trust lengths from the file.
 - File-serving endpoints only serve files resolved inside a registered library's `.cache/`.
 

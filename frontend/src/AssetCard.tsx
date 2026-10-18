@@ -1,5 +1,5 @@
 import { memo, useState } from "react";
-import { api, errorText, thumbnailUrl, type App, type Asset, type AssetStatus } from "./api";
+import { api, errorText, thumbnailUrl, type App, type Asset, type AssetStatus, type Session } from "./api";
 
 const STATUS_LABEL: Record<AssetStatus, string> = {
   pending: "Pending",
@@ -10,6 +10,8 @@ const STATUS_LABEL: Record<AssetStatus, string> = {
 };
 
 export const appLabel = (app: App) => `Open in ${app.name}${app.version ? ` (v${app.version})` : ""}`;
+export const sessionFile = (s: Session) => s.file?.split(/[\\/]/).pop() || "untitled";
+export const sessionLabel = (s: Session) => `Import into ${s.app}${s.version ? ` ${s.version}` : ""} — ${sessionFile(s)}`;
 
 function formatSize(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -26,7 +28,20 @@ type Props = {
 
 export const AssetCard = memo(function AssetCard({ asset, apps, onHoverStart, onHoverEnd }: Props) {
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
+  const [sessions, setSessions] = useState<Session[]>([]);
   const openers = apps.filter((a) => a.exts.includes(asset.ext));
+  const importers = sessions.filter((s) => s.exts.includes(asset.ext));
+  const refreshSessions = () => {
+    api.listSessions().then(setSessions, () => setSessions([]));
+  };
+
+  const importInto = (s: Session) => {
+    setNote({ text: `Importing into ${sessionFile(s)}…`, error: false });
+    api.importInto(s.id, asset.id).then(
+      ({ imported }) => setNote({ text: `Imported ${imported.join(", ") || "nothing"} into ${sessionFile(s)}`, error: false }),
+      (e: unknown) => setNote({ text: errorText(e), error: true }),
+    );
+  };
 
   const launch = (app: App) => {
     setNote({ text: `Opening in ${app.name}…`, error: false });
@@ -73,21 +88,28 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onHoverStart, on
           <span>.{asset.ext}{asset.dcc_version ? ` · v${asset.dcc_version}` : ""}</span>
           <span>{formatSize(asset.size)}</span>
         </div>
-        {openers.length > 0 && (
+        {(openers.length > 0 || importers.length > 0) && (
           <select
             aria-label="Open in application"
             className="rounded bg-neutral-800 px-1 py-0.5 text-neutral-200"
             value=""
+            onPointerEnter={refreshSessions}
+            onFocus={refreshSessions}
             onChange={(e) => {
-              const app = openers.find((a) => a.id === e.target.value);
+              const session = importers.find((s) => `session:${s.id}` === e.target.value);
+              const app = openers.find((a) => `app:${a.id}` === e.target.value);
+              if (session) importInto(session);
               if (app) launch(app);
             }}
           >
             <option value="" disabled>
-              {openers.length === 1 ? appLabel(openers[0]) : "Open in…"}
+              {importers.length > 0 ? "Open or import…" : openers.length === 1 ? appLabel(openers[0]) : "Open in…"}
             </option>
+            {importers.map((s) => (
+              <option key={s.id} value={`session:${s.id}`}>{sessionLabel(s)}</option>
+            ))}
             {openers.map((a) => (
-              <option key={a.id} value={a.id}>{appLabel(a)}</option>
+              <option key={a.id} value={`app:${a.id}`}>{appLabel(a)}</option>
             ))}
           </select>
         )}

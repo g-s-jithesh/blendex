@@ -210,7 +210,7 @@ def spawned(log: Path) -> list[tuple[str, str]]:
     return [(Path(p).name, mode) for p, mode in (line.split("\t") for line in lines)]
 
 
-BLENDERS = sorted((a for a in dcc.detect_apps() if "blend" in a["exts"]), key=dcc._version_key)
+BLENDERS = sorted((a for a in dcc.detect_apps() if a["id"].startswith("blender")), key=dcc._version_key)
 BLENDER = BLENDERS[-1]["executable"] if BLENDERS else None
 FIXTURES = ROOT / "tests" / "fixtures" / "out"
 FIXTURE_NAMES = ["preview.blend", "preview_zstd.blend", "nopreview.blend", "camera.blend", "empty_scene.blend",

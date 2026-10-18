@@ -19,7 +19,7 @@ from conftest import (
 )
 from fastapi.testclient import TestClient
 
-from backend import indexer
+from backend import dcc, indexer
 from backend.app import create_app
 from backend.blend_header import parse_blend_header
 from backend.blend_preview import read_embedded_preview, rgba_to_png
@@ -161,7 +161,7 @@ def test_real_daemon_end_to_end(real_fixtures, real_daemon, tmp_path):
         shutil.copy2(real_fixtures / n, lib / n)
     sums = {n: md5(lib / n) for n in names}
     apps = c.get("/api/apps").json()
-    assert any(a["executable"] == BLENDER and a["exts"] == ["blend"] for a in apps), apps
+    assert any(a["executable"] == BLENDER and a["exts"] == ["blend", *dcc.BLENDER_IMPORTS] for a in apps), apps
     add_library(c, lib.resolve())
     drain(app, c)
     got = by_name(c)

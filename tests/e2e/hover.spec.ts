@@ -108,7 +108,7 @@ async function setup(page: Page) {
       return;
     }
     if (path === "/api/libraries") return route.fulfill({ json: [{ id: 1, path: "C:/lib", created_at: 1 }] });
-    if (path === "/api/apps") return route.fulfill({ json: [] });
+    if (path === "/api/apps" || path === "/api/sessions" || path === "/api/bridges") return route.fulfill({ json: [] });
     if (path === "/api/assets") return route.fulfill({ json: { items: ASSETS, total: N } });
     return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND", message: path } } });
   });

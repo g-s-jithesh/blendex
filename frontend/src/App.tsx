@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
-import { api, errorText, type App as DccApp, type Library } from "./api";
+import { api, errorText, type App as DccApp, type Bridge, type Library } from "./api";
 import { AssetCard } from "./AssetCard";
 import { useAssets, type AssetFilters } from "./useAssets";
 import { useHoverPreview } from "./useHoverPreview";
@@ -17,6 +17,8 @@ export function App() {
   const [q, setQ] = useState("");
   const [newPath, setNewPath] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [bridges, setBridges] = useState<Bridge[]>([]);
+  const [bridgeNote, setBridgeNote] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setQ(qInput.trim()), SEARCH_DEBOUNCE_MS);
@@ -26,7 +28,19 @@ export function App() {
   useEffect(() => {
     api.listLibraries().then(setLibraries, (e: unknown) => setError(errorText(e)));
     api.listApps().then(setApps, (e: unknown) => setError(errorText(e)));
+    api.listBridges().then(setBridges, (e: unknown) => setError(errorText(e)));
   }, []);
+
+  const installBridge = (b: Bridge) => {
+    setBridgeNote(`Installing the bridge into ${b.name}…`);
+    api.installBridge(b.app_id).then(
+      () => {
+        setBridges((all) => all.map((x) => (x.app_id === b.app_id ? { ...x, installed: true } : x)));
+        setBridgeNote(`Bridge installed. Restart ${b.name} to import into it from here.`);
+      },
+      (e: unknown) => setBridgeNote(errorText(e)),
+    );
+  };
 
   const filters = useMemo<AssetFilters>(
     () => ({ library_id: libraryId, q: q || undefined, ext: ext.trim().replace(/^\./, "").toLowerCase() || undefined }),
@@ -97,6 +111,18 @@ export function App() {
           value={qInput}
           onChange={(e) => setQInput(e.target.value)}
         />
+        {bridges.filter((b) => !b.installed).map((b) => (
+          <button
+            key={b.app_id}
+            type="button"
+            className="rounded bg-sky-700 px-2 py-1 text-white hover:bg-sky-600"
+            title={`Lets you import assets into an open ${b.name} session`}
+            onClick={() => installBridge(b)}
+          >
+            Install {b.name} bridge
+          </button>
+        ))}
+        {bridgeNote && <span role="status" className="text-neutral-300">{bridgeNote}</span>}
         <span className="ml-auto text-neutral-400">
           {loading ? "Loading…" : `${page.items.length} of ${page.total} assets`}
         </span>

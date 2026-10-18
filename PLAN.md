@@ -117,6 +117,7 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 | 2026-10-18 | Embedded preview: REND → TEST → GLOB order, RGBA8 bottom-up, premultiplied alpha (un-premultiply for PNG), ≤ 512 px, ≤ 2 MiB decompressed read; big-endian / < 2.50 → no preview. zstd extraction only on Python ≥ 3.14, else Blender fallback | `docs/blend_header_spec.md` Part 2 |
 | 2026-10-18 | Reverses the Phase 5 image-only rule (user decision): `.blend` shows its embedded preview instantly, then always runs a full Blender job (512px PNG + polycount + GLB), so `.blend` cards get the hover 3D viewer. Startup re-queues `.blend` assets that are `ready` without a proxy | User chose "Full 3D for .blend" after a code review flagged missing `.blend` proxies |
 | 2026-10-18 | Proxy script switches any edit/sculpt/pose mode to object mode after load, and always frames a temporary 3/4 camera on all meshes (scene camera ignored) | Edit/sculpt/pose files failed `select_all.poll()`; workfile cameras often point away from the mesh |
+| 2026-10-18 | Open with: Blender imports non-blend 3D files into a new session; Windows adds Explorer (show in folder) and the system "Open with" picker for every ext. Import into an *already running* Blender goes through the `dam_bridge` add-on (localhost socket + token), installed by an in-app button; Blender only for now | User wants to import assets into the project they already have open; Maya/3ds Max/Houdini/C4D deferred until installed and testable |
 
 ## Backlog
 
@@ -126,6 +127,8 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 - [for:backend-coder→frontend-coder] `POST /convert` without a file save keeps the same `v=<mtime>`, so browsers may show the stale obj/fbx thumbnail/proxy until next save. Fix only if it matters (e.g. expose a version id)
 
 - [for:architect→backend-coder] If a library's `.cache` is a junction/symlink, the worker writes through it (`cache_dir()` + `os.replace`) and could overwrite a file outside the library. Serving already refuses this. Decide: refuse writes when `.cache` resolves outside the library (low severity: requires write access to the library)
+
+- [for:backend-coder] Maya / 3ds Max / Houdini / C4D import bridges (Maya: commandPort). Not installed here, so untestable
 
 ## Log
 
@@ -152,3 +155,4 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 - 2026-10-18 [orchestrator] T17 done: final re-run pytest 175 passed (0 skipped), vitest 16/16, build OK, ruff clean.
 - 2026-10-18 [orchestrator] Review fixes: blend full 3D (worker.route always enqueues; PROXY_EXTS += blend; db.set_thumbnail; reroute image-only blends), proxy script object-mode + always-framed camera, tests updated (+ edit/sculpt real fixtures). Scroll alignment already handled by useHoverPreview (scroll/resize cancel). Verify: .venv/Scripts/python -m pytest -q (177 passed); npm --prefix frontend run test
 - 2026-10-18 [orchestrator] Fix: hover preview stuck on "Loading…" for real (Draco) proxies. three 0.182 DRACOLoader has no default decoder path, so it fetched /draco_wasm_wrapper.js, got index.html and hung. Decoder now served from frontend/public/draco (setDecoderPath("/draco/")); parse has a 30 s timeout that shows an error instead of loading forever; e2e asserts the decoder is served. Verify: npx --prefix tests/e2e playwright test -c tests/e2e (4 passed)
+- 2026-10-18 [orchestrator] Open with + live Blender import: scripts/dam_bridge.py (add-on), blender_open_import.py, install_dam_bridge.py; backend/bridge.py + /sessions, /sessions/{id}/import, /bridges; Explorer + Windows picker apps; card menu lists running sessions; header Install bridge button. Verified live in a Blender 5.2 GUI session (obj/fbx/glb/stl/usdz/abc/blend). Verify: .venv/Scripts/python -m pytest -q; npx --prefix tests/e2e playwright test -c tests/e2e

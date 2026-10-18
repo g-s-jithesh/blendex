@@ -7,6 +7,8 @@ export type Asset = {
   has_thumbnail: boolean; has_proxy: boolean;
 };
 export type App = { id: string; name: string; version: string | null; executable: string; exts: string[] };
+export type Session = { id: string; app: string; version: string | null; pid: number; file: string | null; exts: string[] };
+export type Bridge = { app_id: string; name: string; installed: boolean };
 export type AssetPage = { items: Asset[]; total: number };
 export type Health = { status: "ok"; version: string };
 
@@ -17,7 +19,7 @@ export type AssetEvent = { type: EventType; asset_id: number; data: Asset };
 
 export type ErrorCode =
   | "VALIDATION_ERROR" | "INVALID_PATH" | "NOT_FOUND" | "ALREADY_EXISTS"
-  | "UNSUPPORTED" | "LAUNCH_FAILED" | "INTERNAL";
+  | "UNSUPPORTED" | "LAUNCH_FAILED" | "BRIDGE_FAILED" | "INTERNAL";
 export type ErrorEnvelope = { error: { code: ErrorCode; message: string } };
 
 export class ApiError extends Error {
@@ -81,6 +83,11 @@ export const api = {
   convertAsset: (id: number) => request<void>(`/assets/${id}/convert`, { method: "POST" }),
   listApps: () => request<App[]>("/apps"),
   launch: (asset_id: number, app_id: string) => request<void>("/launch", post({ asset_id, app_id })),
+  listSessions: () => request<Session[]>("/sessions"),
+  importInto: (session_id: string, asset_id: number) =>
+    request<{ imported: string[] }>(`/sessions/${encodeURIComponent(session_id)}/import`, post({ asset_id })),
+  listBridges: () => request<Bridge[]>("/bridges"),
+  installBridge: (app_id: string) => request<void>(`/bridges/${encodeURIComponent(app_id)}`, { method: "POST" }),
 };
 
 export const thumbnailUrl = (a: Asset) => `${API_BASE}/assets/${a.id}/thumbnail?v=${a.mtime}`;
