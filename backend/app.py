@@ -14,7 +14,7 @@ from . import bridge, db, dcc
 from .indexer import CONVERTIBLE, PROXY_EXTS, Indexer
 from .worker import Worker
 
-VERSION = "1.0.0"
+VERSION = "1.0.1"
 
 
 class ApiError(Exception):

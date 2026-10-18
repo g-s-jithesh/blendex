@@ -4,15 +4,15 @@ A local 3D asset manager for Windows. Point it at your project folders and it in
 
 Everything runs on your machine. Nothing is uploaded anywhere.
 
-## Download and run
+## Install
 
-1. Download `Blendex-<version>-win64.zip` from [Releases](https://github.com/g-s-jithesh/blendex/releases) and unzip it anywhere.
-2. Double-click `Blendex\Blendex.exe`. Your browser opens at http://127.0.0.1:8765.
+1. Download `Blendex-<version>-Setup.exe` from [Releases](https://github.com/g-s-jithesh/blendex/releases) and run it. It installs for your user only (no admin prompt) and adds a Start menu shortcut, and optionally a desktop one.
+2. Start **Blendex**. It opens in its own app window.
 3. Paste a folder path into **Add library folder path…** and click **Add**.
 
-Keep the Blendex console window open while you use it; closing it quits the app. Windows SmartScreen may warn the first time because the exe is not code-signed: choose **More info → Run anyway**.
+Closing the Blendex window quits the app, including any Blender jobs it started; they resume next time. Uninstall from **Settings → Apps**; your library index in `%APPDATA%\dam` is kept. Windows SmartScreen may warn the first time because the installer is not code-signed: choose **More info → Run anyway**.
 
-**Requirements:** Windows 10/11 and [Blender](https://www.blender.org/download/) 4.2 or newer (tested with 5.2 LTS). Blender is used for thumbnails, 3D previews and imports. Without it, `.blend` files still show their saved preview image.
+**Requirements:** Windows 10/11 with Microsoft Edge (preinstalled; Chrome also works) and [Blender](https://www.blender.org/download/) 4.2 or newer (tested with 5.2 LTS). Blender is used for thumbnails, 3D previews and imports. Without it, `.blend` files still show their saved preview image. If Blendex fails to start, it shows the reason and writes details to `%APPDATA%\dam\blendex.log`.
 
 ## Features
 
@@ -32,13 +32,13 @@ Needs Python 3.11+ (3.14 recommended, for reading zstd-compressed `.blend` previ
 start.bat
 ```
 
-runs the development version (backend on port 8765, UI on http://127.0.0.1:5173). To build the portable release:
+runs the development version (backend on port 8765, UI on http://127.0.0.1:5173). To build the installer you also need [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`):
 
 ```bat
 .venv\Scripts\python -m pip install -r packaging\requirements.txt
 .venv\Scripts\python packaging\build.py
 ```
 
-The zip lands in `release\`.
+`release\Blendex-<version>-Setup.exe` is the installer; `release\dist\Blendex\` is the unpacked app.
 
 Tests: `.venv\Scripts\python -m pytest`, `npm --prefix frontend run test`, `npx --prefix tests/e2e playwright test -c tests/e2e`.
