@@ -334,3 +334,12 @@ test("rapid sweeps and mid-load leaves across 20 cards leak no contexts, geometr
   expect(net.badVersion).toEqual([]);
   expect(badLogs(log)).toEqual([]);
 });
+
+test("Draco decoder is served from /draco/, not the SPA fallback page", async ({ request }) => {
+  const wasm = await request.get("/draco/draco_decoder.wasm");
+  expect(wasm.ok()).toBe(true);
+  expect([...(await wasm.body()).subarray(0, 4)]).toEqual([0x00, 0x61, 0x73, 0x6d]);
+  const wrapper = await request.get("/draco/draco_wasm_wrapper.js");
+  expect(wrapper.headers()["content-type"]).toMatch(/javascript/);
+  expect(await wrapper.text()).toContain("DracoDecoderModule");
+});

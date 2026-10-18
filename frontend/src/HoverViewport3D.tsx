@@ -18,9 +18,11 @@ export type Proxy3D = {
   radius: number;
 };
 
-// three r186 DRACOLoader defaults to its bundled decoder (Vite emits it into dist/), so no CDN.
+export const PARSE_TIMEOUT_MS = 30_000;
+
+// three 0.182's DRACOLoader has no default decoder path; public/draco is three's own decoder, served offline.
 let gltfLoader: GLTFLoader | null = null;
-const loader = () => (gltfLoader ??= new GLTFLoader().setDRACOLoader(new DRACOLoader()));
+const loader = () => (gltfLoader ??= new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/")));
 
 export function prepareProxy(root: Object3D): Proxy3D {
   const meshes: Proxy3D["meshes"] = [];
@@ -41,7 +43,10 @@ export function prepareProxy(root: Object3D): Proxy3D {
 export async function loadProxy(url: string, signal: AbortSignal): Promise<Proxy3D> {
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Proxy fetch failed: HTTP ${res.status}`);
-  const gltf = await loader().parseAsync(await res.arrayBuffer(), "");
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error("Preview timed out while decoding the model")), PARSE_TIMEOUT_MS),
+  );
+  const gltf = await Promise.race([loader().parseAsync(await res.arrayBuffer(), ""), timeout]);
   return prepareProxy(gltf.scene);
 }
 
