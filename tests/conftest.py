@@ -198,7 +198,7 @@ def lib(tmp_path) -> Path:
 
 @pytest.fixture
 def spawn_log(tmp_path) -> Path:
-    return tmp_path / "spawns.log"
+    return tmp_path / "spawns"
 
 
 def spawns(log: Path) -> int:
@@ -206,8 +206,8 @@ def spawns(log: Path) -> int:
 
 
 def spawned(log: Path) -> list[tuple[str, str]]:
-    lines = log.read_text(encoding="utf-8").splitlines() if log.exists() else []
-    return [(Path(p).name, mode) for p, mode in (line.split("\t") for line in lines)]
+    entries = [f.read_text(encoding="utf-8") for f in sorted(log.iterdir())] if log.exists() else []
+    return [(Path(p).name, mode) for p, mode in (entry.split("\t") for entry in entries)]
 
 
 BLENDERS = sorted((a for a in dcc.detect_apps() if a["id"].startswith("blender")), key=dcc._version_key)

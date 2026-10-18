@@ -20,8 +20,10 @@ args = p.parse_args(rest)
 assert all(os.path.isabs(v) for v in vars(args).values() if v), sys.argv
 assert os.path.isfile(args.input), args.input
 if log := os.environ.get("FAKE_BLENDER_LOG"):
-    with open(log, "a", encoding="utf-8") as f:
-        f.write(f"{args.input}\t{'full' if args.out_glb else 'thumb'}\n")
+    # One file per launch: concurrent appends to a shared file can drop lines on Windows.
+    os.makedirs(log, exist_ok=True)
+    with open(os.path.join(log, f"{time.time_ns()}-{os.getpid()}.txt"), "x", encoding="utf-8") as f:
+        f.write(f"{args.input}\t{'full' if args.out_glb else 'thumb'}")
 time.sleep(float(os.environ.get("FAKE_BLENDER_SLEEP", "0")))
 
 
