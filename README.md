@@ -7,12 +7,12 @@ Everything runs on your machine. Nothing is uploaded anywhere.
 ## Install
 
 1. Download `Blendex-<version>-Setup.exe` from [Releases](https://github.com/g-s-jithesh/blendex/releases) and run it. It installs for your user only (no admin prompt) and adds a Start menu shortcut, and optionally a desktop one.
-2. Start **Blendex**. It opens in its own app window.
+2. Start **Blendex**. It opens in its own window (about 200 MB of RAM, 250 MB with a 3D preview open).
 3. Paste a folder path into **Add library folder path…** and click **Add**.
 
 Closing the Blendex window quits the app, including any Blender jobs it started; they resume next time. Uninstall from **Settings → Apps**; your library index in `%APPDATA%\dam` is kept. Windows SmartScreen may warn the first time because the installer is not code-signed: choose **More info → Run anyway**.
 
-**Requirements:** Windows 10/11 with Microsoft Edge (preinstalled; Chrome also works) and [Blender](https://www.blender.org/download/) 4.2 or newer (tested with 5.2 LTS). Blender is used for thumbnails, 3D previews and imports. Without it, `.blend` files still show their saved preview image. If Blendex fails to start, it shows the reason and writes details to `%APPDATA%\dam\blendex.log`.
+**Requirements:** Windows 10/11 with the Microsoft Edge WebView2 Runtime (built into Windows 11 and up-to-date Windows 10; Blendex links to the download if it is missing) and [Blender](https://www.blender.org/download/) 4.2 or newer (tested with 5.2 LTS). Blender is used for thumbnails, 3D previews and imports. Without it, `.blend` files still show their saved preview image. If Blendex fails to start, it shows the reason and writes details to `%APPDATA%\dam\blendex.log`.
 
 ## Features
 

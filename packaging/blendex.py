@@ -1,29 +1,30 @@
 import ctypes
 import json
 import os
-import subprocess
 import sys
 import threading
 import time
 import traceback
 import urllib.request
-import webbrowser
 from pathlib import Path
 
 import uvicorn
+import webview
 
 from backend.app import VERSION, create_app
 from backend.db import default_db_path
 
 HOST, PORT = "127.0.0.1", 8765
 URL = f"http://{HOST}:{PORT}/"
+TITLE = "Blendex"
 BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 LOG = Path(default_db_path()).parent / "blendex.log"
-WINDOW_PROFILE = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Blendex" / "window"
+WEBVIEW_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Blendex" / "webview"
+WEBVIEW2_URL = "https://developer.microsoft.com/microsoft-edge/webview2/"
 
 
 def message(text: str, error: bool = False) -> None:
-    ctypes.windll.user32.MessageBoxW(None, text, "Blendex", 0x10 if error else 0x40)
+    ctypes.windll.user32.MessageBoxW(None, text, TITLE, 0x10 if error else 0x40)
 
 
 def running_blendex() -> bool | None:
@@ -34,30 +35,24 @@ def running_blendex() -> bool | None:
         return None
 
 
-def app_browser() -> str | None:
-    roots = [os.environ.get(k) for k in ("ProgramFiles(x86)", "ProgramFiles", "LOCALAPPDATA")]
-    for rel in (("Microsoft", "Edge", "Application", "msedge.exe"), ("Google", "Chrome", "Application", "chrome.exe")):
-        for root in filter(None, roots):
-            if (exe := Path(root, *rel)).is_file():
-                return str(exe)
-    return None
-
-
-def window_profile_in_use() -> bool:
-    try:
-        (WINDOW_PROFILE / "lockfile").unlink(missing_ok=True)
-    except PermissionError:
-        return True
+def focus_running_window() -> bool:
+    user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
+    hwnd = user32.FindWindowW(None, TITLE)
+    while hwnd:
+        pid = ctypes.c_ulong()
+        user32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
+        handle = kernel32.OpenProcess(0x1000, False, pid.value)
+        path = ctypes.create_unicode_buffer(32768)
+        size = ctypes.c_ulong(len(path))
+        found = handle and kernel32.QueryFullProcessImageNameW(handle, 0, path, ctypes.byref(size))
+        if handle:
+            kernel32.CloseHandle(handle)
+        if found and os.path.normcase(path.value) == os.path.normcase(sys.executable):
+            user32.ShowWindow(hwnd, 9)
+            user32.SetForegroundWindow(hwnd)
+            return True
+        hwnd = user32.FindWindowExW(None, hwnd, None, TITLE)
     return False
-
-
-def open_window() -> subprocess.Popen | None:
-    exe = app_browser()
-    if not exe:
-        webbrowser.open(URL)
-        return None
-    return subprocess.Popen([exe, f"--app={URL}", f"--user-data-dir={WINDOW_PROFILE}", "--window-size=1440,900",
-                             "--no-first-run", "--no-default-browser-check", "--disable-background-mode"])
 
 
 def serve() -> None:
@@ -70,15 +65,15 @@ def serve() -> None:
             raise RuntimeError(f"the server stopped while starting; port {PORT} may be in use")
         time.sleep(0.1)
     print(f"Blendex {VERSION} running at {URL}", flush=True)
-    # An Edge still running on our profile (left by a crashed Blendex) takes the window and our process exits at once.
-    tracked = not window_profile_in_use()
-    window = open_window()
-    if window and tracked:
-        window.wait()
-    else:
-        message(f"Blendex is open at {URL}\n\nClick OK to quit Blendex.")
-    server.should_exit = True
-    thread.join(timeout=30)
+    try:
+        webview.create_window(TITLE, URL, width=1440, height=900, min_size=(800, 560))
+        webview.start(gui="edgechromium", private_mode=False, storage_path=str(WEBVIEW_DATA))
+    except Exception as e:
+        raise RuntimeError(f"the Microsoft Edge WebView2 Runtime is missing or broken ({e}).\n"
+                           f"Install it from {WEBVIEW2_URL} and start Blendex again") from e
+    finally:
+        server.should_exit = True
+        thread.join(timeout=30)
 
 
 def main() -> None:
@@ -87,7 +82,8 @@ def main() -> None:
         sys.stdout = sys.stderr = open(LOG, "a", encoding="utf-8", buffering=1)  # noqa: SIM115
     state = running_blendex()
     if state:
-        open_window()
+        if not focus_running_window():
+            message(f"Blendex is already running at {URL}")
     elif state is False:
         raise RuntimeError(f"port {PORT} is used by another program; close it and start Blendex again")
     else:

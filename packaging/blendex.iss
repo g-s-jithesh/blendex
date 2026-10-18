@@ -35,5 +35,8 @@ Source: "..\release\dist\Blendex\*"; DestDir: "{app}"; Flags: ignoreversion recu
 Name: "{autoprograms}\Blendex"; Filename: "{app}\Blendex.exe"
 Name: "{autodesktop}\Blendex"; Filename: "{app}\Blendex.exe"; Tasks: desktopicon
 
+[UninstallDelete]
+Type: filesandordirs; Name: "{localappdata}\Blendex"
+
 [Run]
 Filename: "{app}\Blendex.exe"; Description: "{cm:LaunchProgram,Blendex}"; Flags: nowait postinstall skipifsilent

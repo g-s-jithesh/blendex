@@ -12,7 +12,7 @@ Local-first asset manager for 3D project folders. A React UI talks to a local Py
 | Database | SQLite via stdlib `sqlite3` (no ORM) |
 | Conversion | Blender headless (`blender -b --factory-startup --python-exit-code 1 -P scripts/blender_export_proxy.py -- --input <file> <args>`) builds the thumbnail + GLB proxy for blend/obj/fbx; `.blend` files also show their embedded thumbnail instantly while that job runs. Min Blender 4.2; dev machine has only 5.2.2 LTS. Maya launch-only for now (not installed on dev machine) |
 | Tests | `pytest` (backend, parsers, scripts), `vitest` (frontend logic) |
-| Desktop shell | None in Phases 1–4: browser-served dev build, Vite dev server proxies `/api` and `/ws` to the daemon. Shell choice deferred (`PLAN.md` → Decisions) |
+| Desktop shell | Dev: Vite dev server proxies `/api` and `/ws` to the daemon (`start.bat`). Release: PyInstaller `Blendex.exe` (`packaging/blendex.py`) runs the daemon, which serves the built UI, inside its own WebView2 window via `pywebview`; Inno Setup installer (`packaging/blendex.iss`). Build with `packaging/build.py` |
 
 Do not add dependencies outside this table without an entry in `PLAN.md` → Decisions.
 
