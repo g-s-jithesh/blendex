@@ -99,7 +99,7 @@ Blendex never modifies or deletes your original files.
 |---|---|
 | SmartScreen blocks the installer | **More info → Run anyway**. The installer is not code-signed. |
 | "WebView2 Runtime is missing" | Install the [Evergreen WebView2 Runtime](https://developer.microsoft.com/microsoft-edge/webview2/) and start Blendex again. |
-| "Port 8765 is used by another program" | Close the program using that port, or a second copy of the development version (`start.bat`). |
+| "Port 8765 is used by another program" | Close the program using that port, or a second copy of the development version (`start.bat`), or start Blendex on another port with `DAM_PORT`. |
 | Cards stay on **Pending**, or show **Conversion failed** with "Blender not found" when you hover them | Install Blender 4.2+ in the default folder, or point Blendex at it with `DAM_BLENDER` (see below). |
 | An open Blender is not listed under **Import into…** | Install the bridge from the header (with Blender closed), then restart Blender. A Blender that is busy rendering is not listed until it is idle. |
 | Blender prints `Add-on not loaded: "dam_bridge"` at startup | Click **Install Blender X.Y bridge** again in Blendex to reinstall the add-on. |
@@ -116,6 +116,7 @@ Optional environment variables (set them before starting Blendex):
 | `DAM_JOB_TIMEOUT` | `600` | Seconds before a stuck conversion is stopped |
 | `DAM_CONVERT` | on demand | `all` converts every `.blend`, `.obj` and `.fbx` as soon as it is indexed, instead of only the cards you scroll to or hover |
 | `DAM_DB` | `%APPDATA%\dam\dam.sqlite` | Location of the library index |
+| `DAM_PORT` | `8765` | Port Blendex listens on (always on `127.0.0.1` only) |
 
 ## Known limitations
 
