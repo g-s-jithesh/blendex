@@ -38,7 +38,7 @@ PLAN.md            Single source of truth for phases, tasks, decisions, status
 
 ## Runtime Contract
 
-- Daemon binds `127.0.0.1:8765` only. Never `0.0.0.0`.
+- Daemon binds `127.0.0.1:8765` only (the desktop launcher takes another port from `DAM_PORT`). Never `0.0.0.0`.
 - Base URL `http://127.0.0.1:8765/api`, WebSocket `ws://127.0.0.1:8765/ws/events`.
 - All JSON uses `snake_case`. Timestamps are integer Unix epoch seconds. IDs are integers.
 - Errors: HTTP status + `{"error": {"code": "<SNAKE_CODE>", "message": "<human text>"}}`. Codes: `VALIDATION_ERROR` 422 (FastAPI's default 422 body is overridden), `INVALID_PATH` 422, `NOT_FOUND` 404, `ALREADY_EXISTS` 409, `UNSUPPORTED` 409 (ext not convertible / not opened by that app), `LAUNCH_FAILED` 500, `BRIDGE_FAILED` 502 (a Blender session or bridge install failed), `INTERNAL` 500.
