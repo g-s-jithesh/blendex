@@ -1,6 +1,8 @@
 import os
+import threading
 import time
 
+import pytest
 from conftest import (
     add_library,
     blend,
@@ -15,6 +17,8 @@ from conftest import (
     spawns,
     wait_until,
 )
+
+from backend import worker
 
 
 def temp_files(lib) -> list[str]:
@@ -214,3 +218,46 @@ def test_on_demand_indexing_spawns_nothing_until_requested(daemon, lib, monkeypa
     with daemon() as (app, c):
         drain(app, c)
         assert spawns(spawn_log) == 1 and len(items(c)) == 32
+
+
+def test_request_while_converting_does_not_start_a_second_job(daemon, lib, monkeypatch, spawn_log):
+    monkeypatch.delenv("DAM_CONVERT")
+    monkeypatch.setenv("FAKE_BLENDER_SLEEP", "2")
+    (lib / "m.obj").write_bytes(b"o")
+    with daemon() as (app, c):
+        add_library(c, lib)
+        drain(app, c)
+        asset = by_name(c)["m.obj"]
+        assert c.post(f"/api/assets/{asset['id']}/convert").status_code == 202
+        assert wait_until(lambda: queue(c)["running"] == 1)
+        for _ in range(3):
+            assert c.post(f"/api/assets/{asset['id']}/convert").status_code == 202
+        assert queue(c) == {"queued": 0, "running": 1, "paused": False}
+        (lib / "m.obj").write_bytes(b"o edited")
+        assert wait_until(lambda: c.get(f"/api/assets/{asset['id']}").json()["size"] != asset["size"])
+        assert c.post(f"/api/assets/{asset['id']}/convert").status_code == 202
+        drain(app, c)
+        assert spawned(spawn_log) == [("m.obj", "full")] * 2
+        assert c.get(f"/api/assets/{asset['id']}").json()["status"] == "ready"
+
+
+@pytest.mark.skipif(os.name != "nt", reason="only Windows refuses to replace an open file")
+def test_replace_waits_for_a_reader_to_let_go(tmp_path):
+    dst, src = tmp_path / "1.png", tmp_path / "new.tmp"
+    dst.write_bytes(b"old")
+    src.write_bytes(b"new")
+    reader = open(dst, "rb")  # noqa: SIM115
+    threading.Timer(0.3, reader.close).start()
+    worker.replace_retrying(src, dst)
+    assert dst.read_bytes() == b"new" and not src.exists()
+
+
+@pytest.mark.skipif(os.name != "nt", reason="only Windows refuses to replace an open file")
+def test_replace_gives_up_when_the_target_stays_open(tmp_path, monkeypatch):
+    monkeypatch.setattr(worker, "REPLACE_RETRY_DELAYS", (0.01, 0.01))
+    dst, src = tmp_path / "1.png", tmp_path / "new.tmp"
+    dst.write_bytes(b"old")
+    src.write_bytes(b"new")
+    with open(dst, "rb"), pytest.raises(PermissionError):
+        worker.replace_retrying(src, dst)
+    assert src.read_bytes() == b"new"

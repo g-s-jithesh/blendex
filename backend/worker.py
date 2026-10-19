@@ -7,6 +7,7 @@ import secrets
 import signal
 import sqlite3
 import subprocess
+import time
 from collections.abc import Callable
 from pathlib import Path
 
@@ -15,6 +16,7 @@ from .blend_preview import read_embedded_preview, rgba_to_png
 from .indexer import CONVERTIBLE, PROXY_EXTS
 
 SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "blender_export_proxy.py"
+REPLACE_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
 log = logging.getLogger(__name__)
 
 
@@ -50,6 +52,16 @@ def cache_dir(library_path: str) -> Path:
     return cache
 
 
+def replace_retrying(src: str | Path, dst: Path) -> None:
+    # Windows refuses to replace a file another handle has open, e.g. a thumbnail being served right now.
+    for delay in REPLACE_RETRY_DELAYS:
+        try:
+            return os.replace(src, dst)
+        except PermissionError:
+            time.sleep(delay)
+    os.replace(src, dst)
+
+
 def write_embedded_preview(src: str, library_path: str, asset_id: int) -> bool:
     tmp = None
     try:
@@ -58,7 +70,7 @@ def write_embedded_preview(src: str, library_path: str, asset_id: int) -> bool:
             return False
         tmp = cache / f"{asset_id}.{secrets.token_hex(4)}.tmp.png"
         tmp.write_bytes(rgba_to_png(*preview))
-        os.replace(tmp, cache / f"{asset_id}.png")
+        replace_retrying(tmp, cache / f"{asset_id}.png")
         return True
     except OSError:
         log.exception("writing embedded preview of asset %s failed", asset_id)
@@ -84,6 +96,7 @@ class Worker:
         self.conn, self.publish, self.on_queue = conn, publish, on_queue
         self.queue: asyncio.Queue[int] = asyncio.Queue()
         self.queued: set[int] = set()
+        self.active: dict[int, int | None] = {}
         self.running = 0
         self.unpaused = asyncio.Event()
         self.unpaused.set()
@@ -130,7 +143,8 @@ class Worker:
             self.flush.cancel()
 
     def enqueue(self, asset_id: int) -> None:
-        if asset_id not in self.queued:
+        converting_this_version = self.active.get(asset_id, -1) == db.current_version_id(self.conn, asset_id)
+        if asset_id not in self.queued and not converting_this_version:
             self.queued.add(asset_id)
             self.queue.put_nowait(asset_id)
             self._changed()
@@ -156,6 +170,7 @@ class Worker:
             asset_id = await self.queue.get()
             await self.unpaused.wait()
             self.queued.discard(asset_id)
+            self.active[asset_id] = db.current_version_id(self.conn, asset_id)
             self.running += 1
             self._changed()
             try:
@@ -167,6 +182,7 @@ class Worker:
                     db.set_status(self.conn, vid, "failed", f"{type(e).__name__}: {e}")
                     self._emit("conversion.failed", asset_id)
             finally:
+                self.active.pop(asset_id, None)
                 self.running -= 1
                 self._changed()
 
@@ -197,9 +213,9 @@ class Worker:
             if db.current_version_id(self.conn, asset_id) != vid:
                 return
             if rc == 0 and meta.get("ok") and os.path.isfile(png) and (not full or os.path.isfile(glb)):
-                os.replace(png, cache / f"{asset_id}.png")
+                await asyncio.to_thread(replace_retrying, png, cache / f"{asset_id}.png")
                 if full:
-                    os.replace(glb, cache / f"{asset_id}.glb")
+                    await asyncio.to_thread(replace_retrying, glb, cache / f"{asset_id}.glb")
                 db.set_result(self.conn, vid, meta.get("poly_count"), meta.get("proxy_poly_count") if full else None,
                               full)
                 return self._emit("conversion.done", asset_id)
