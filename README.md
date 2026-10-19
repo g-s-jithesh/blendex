@@ -6,7 +6,7 @@
 
 A lightweight 3D asset manager for Windows. Point it at your project folders and it indexes your `.blend`, `.obj`, `.fbx`, `.glb`, `.stl`, `.usd` and other 3D files, shows a thumbnail for each, lets you orbit a 3D preview by hovering a card for 2 seconds, and opens or imports assets into Blender, including straight into the Blender project you already have open.
 
-Everything runs on your own PC. Nothing is uploaded anywhere.
+Everything runs on your own PC. Nothing is uploaded anywhere, and Blendex stays offline unless you turn on update checks.
 
 ![Blendex showing a .blend thumbnail and a live 3D preview of an .obj](docs/screenshot.png)
 
@@ -58,6 +58,7 @@ Each preview decodes its model in a Draco decoder worker that is shut down as so
   - open the file in Blender (`.blend` opens directly; other formats are imported into a new scene),
   - show the file in Explorer,
   - or open Windows' **Open with** picker, to use any other installed program.
+- **Update notice (opt-in).** Tick **Check for updates** in the header to see a banner when a newer Blendex is released. The **Get it from GitHub** link opens the release page in your web browser. Offline or failed checks stay silent.
 - **Import into the Blender you already have open.** Click **Install Blender X.Y bridge** in the header once, with Blender closed. From then on, every Blender you open is listed in the card menus as **Import into Blender X.Y — yourfile.blend**. The asset is added to that scene as one undoable step (Ctrl+Z removes it). `.blend` files append their objects.
 
 ### What each file type gets
@@ -89,7 +90,7 @@ Blendex never modifies or deletes your original files.
 - Blendex only listens on `127.0.0.1` (port 8765), so other computers on your network cannot reach it.
 - The Blender bridge also listens only on `127.0.0.1`, requires a random per-session token, and accepts only "import this 3D file" requests. It cannot run code sent to it.
 - Blender opens your `.blend` files with embedded scripts disabled while making thumbnails.
-- No telemetry and no network access, apart from Blender and WebView2 themselves.
+- No telemetry and no network access, apart from Blender and WebView2 themselves, unless you turn on **Check for updates**. That switch is off by default. When it is on, Blendex asks GitHub's public API for the latest release once each time it starts. The request sends nothing about you or your files beyond what any web request carries (your IP address).
 
 ## Troubleshooting
 
