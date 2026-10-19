@@ -1,5 +1,6 @@
-import { memo, useState, type FormEvent } from "react";
+import { memo, useRef, useState, type FormEvent } from "react";
 import { api, errorText, thumbnailUrl, type App, type Asset, type AssetStatus, type Session } from "./api";
+import { requestConversion, useConvertOnView } from "./convertOnView";
 import { normalizeTag } from "./useAssets";
 
 const STATUS_LABEL: Record<AssetStatus, string> = {
@@ -31,6 +32,8 @@ type Props = {
 };
 
 export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverStart, onHoverEnd }: Props) {
+  const root = useRef<HTMLDivElement>(null);
+  useConvertOnView(root, asset);
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -70,7 +73,11 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
     <div
       data-asset-id={asset.id}
       className="flex flex-col overflow-hidden rounded-md bg-neutral-900 ring-1 ring-neutral-800 hover:ring-neutral-600"
-      onPointerEnter={(e) => onHoverStart(asset, e.currentTarget)}
+      ref={root}
+      onPointerEnter={(e) => {
+        requestConversion(asset);
+        onHoverStart(asset, e.currentTarget);
+      }}
       onPointerLeave={(e) => onHoverEnd(e.relatedTarget)}
     >
       <div data-thumb className="relative aspect-square bg-neutral-800">

@@ -174,6 +174,7 @@ def test_watcher_add_modify_rename_delete(daemon, lib):
         drain(app, c)
         f.rename(lib / "sub" / "renamed.blend")
         wait_until(lambda: set(by_name(c)) == {"renamed.blend"})
+        drain(app, c)
         (lib / "sub" / "renamed.blend").unlink()
         wait_until(lambda: items(c) == [])
         write(lib / "d1" / "x.obj", b"o")

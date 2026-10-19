@@ -89,13 +89,14 @@ Exit code 0 = success, non-zero = failure. Always writes `--out-meta` (also on f
 
 | ext | Preview | Result |
 |---|---|---|
-| `blend` | Embedded thumbnail (`TEST` block, byte rules in `docs/blend_header_spec.md`) extracted inline as `.cache/<id>.png` (temp + `os.replace`), then a full Blender job replaces it | instantly `pending` + `has_thumbnail` true; after the job `ready`, `has_thumbnail` + `has_proxy` true, `poly_count` from meta |
+| `blend` | Embedded thumbnail (`TEST` block, byte rules in `docs/blend_header_spec.md`) extracted inline as `.cache/<id>.png` (temp + `os.replace`), then a full Blender job (on demand) replaces it | instantly `pending` + `has_thumbnail` true; after the job `ready`, `has_thumbnail` + `has_proxy` true, `poly_count` from meta |
 | `blend`, no/unparseable preview | Full Blender job only | `ready`, `has_thumbnail` + `has_proxy` true, `poly_count` from meta |
 | `obj`, `fbx` | Full Blender job: thumbnail + decimated Draco GLB | `ready`, `has_thumbnail` + `has_proxy` true, `poly_count` from meta |
 | other indexed exts | none | `unsupported` |
 
 - The hover 3D viewport opens only when `has_proxy` is true; until the job finishes a `.blend` card shows its embedded thumbnail.
-- Inline extraction emits `asset.added` / `asset.updated` (still `pending`), then the job emits `conversion.*`. `POST /convert` re-runs the same routing. On startup, `.blend` assets that are `ready` without a proxy (indexed under the earlier image-only rule) are re-queued once.
+- Inline extraction emits `asset.added` / `asset.updated` (still `pending`), then the job emits `conversion.*`. `POST /convert` re-runs the same routing. With `DAM_CONVERT=all`, on startup `.blend` assets that are `ready` without a proxy (indexed under the earlier image-only rule) are re-queued once.
+- Conversion is on demand by default: indexing (scan + watcher) does only the inline `.blend` extraction and queues no Blender job, so blend/obj/fbx stay `pending`. The UI calls `POST /convert` for a `pending` card once it has been at least 50% visible for 400 ms, or on hover, at most once per `id:mtime` per page load. `DAM_CONVERT=all` restores eager mode (indexing queues every job, plus the startup re-queue).
 - Clients request `/thumbnail?v=<mtime>` and `/proxy?v=<mtime>` to bust browser caches on save; the backend ignores `v`.
 
 ### Shapes
