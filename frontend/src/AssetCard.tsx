@@ -1,4 +1,4 @@
-import { memo, useRef, useState, type FormEvent } from "react";
+import { memo, useRef, useState } from "react";
 import { api, errorText, thumbnailUrl, type App, type Asset, type AssetStatus, type Session } from "./api";
 import { requestConversion, useConvertOnView } from "./convertOnView";
 import { normalizeTag } from "./useAssets";
@@ -54,8 +54,7 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
   const toggleFavorite = () =>
     onEdit(asset, { ...asset, favorite: !asset.favorite }, () => api.setFavorite(asset.id, !asset.favorite));
   const saveTags = (tags: string[]) => onEdit(asset, { ...asset, tags }, () => api.setTags(asset.id, tags));
-  const addTag = (e: FormEvent) => {
-    e.preventDefault();
+  const addTag = () => {
     const tag = normalizeTag(tagInput);
     setTagInput("");
     if (tag && !asset.tags.includes(tag)) saveTags([...asset.tags, tag].sort());
@@ -72,7 +71,7 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
   return (
     <div
       data-asset-id={asset.id}
-      className="flex flex-col overflow-hidden rounded-md bg-neutral-900 ring-1 ring-neutral-800 hover:ring-neutral-600"
+      className="flex flex-col overflow-hidden rounded-md bg-neutral-900 ring-1 ring-neutral-800 [contain-intrinsic-size:auto_180px_auto_280px] [content-visibility:auto] hover:ring-neutral-600"
       ref={root}
       onPointerEnter={(e) => {
         requestConversion(asset);
@@ -136,16 +135,17 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
               </button>
             </span>
           ))}
-          <form onSubmit={addTag} className="min-w-12 flex-1">
-            <input
-              aria-label={`Add tag to ${asset.name}`}
-              placeholder="+ tag"
-              maxLength={40}
-              className="w-full rounded bg-transparent px-1 text-[10px] text-neutral-300 placeholder:text-neutral-600 focus:bg-neutral-800"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-            />
-          </form>
+          <input
+            aria-label={`Add tag to ${asset.name}`}
+            placeholder="+ tag"
+            maxLength={40}
+            className="min-w-12 flex-1 rounded bg-transparent px-1 text-[10px] text-neutral-300 placeholder:text-neutral-600 focus:bg-neutral-800"
+            value={tagInput}
+            onChange={(e) => setTagInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.nativeEvent.isComposing) addTag();
+            }}
+          />
         </div>
         {(openers.length > 0 || importers.length > 0) && (
           <select

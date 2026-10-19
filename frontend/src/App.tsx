@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api, errorText, type App as DccApp, type Bridge, type Library, type TagCount } from "./api";
 import { AssetCard, type EditAsset } from "./AssetCard";
 import { QueueIndicator } from "./QueueIndicator";
@@ -63,7 +63,8 @@ export function App() {
     }),
     [libraryId, q, ext, favoritesOnly, tag],
   );
-  const { page, error: assetError, loading, update } = useAssets(filters);
+  const sentinel = useRef<HTMLDivElement>(null);
+  const { page, error: assetError, loading, update } = useAssets(filters, sentinel);
   const editAsset = useCallback<EditAsset>(
     (before, after, send) => {
       optimisticEdit(before, after, send, update).then(
@@ -181,6 +182,7 @@ export function App() {
           <AssetCard key={a.id} asset={a} apps={apps} onEdit={editAsset} onHoverStart={hover.enter} onHoverEnd={hover.leave} />
         ))}
       </main>
+      <div ref={sentinel} aria-hidden className="h-px" />
       {hover.active && (
         <Suspense fallback={null}>
           <HoverViewport3D preview={hover.active} onLeave={hover.leave} />
