@@ -65,12 +65,15 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
         s.conn = db.connect(db_path or db.default_db_path())
         s.clients = set()
 
+        def send(msg: dict) -> None:
+            for q in s.clients:
+                q.put_nowait(msg)
+
         def publish(event: str, asset: dict | None) -> None:
             if asset:
-                for q in s.clients:
-                    q.put_nowait({"type": event, "asset_id": asset["id"], "data": asset})
+                send({"type": event, "asset_id": asset["id"], "data": asset})
 
-        s.worker = Worker(s.conn, publish)
+        s.worker = Worker(s.conn, publish, lambda state: send({"type": "queue.updated", "data": state}))
         s.indexer = Indexer(s.conn, publish, s.worker.route)
         s.publish = publish
 
@@ -222,6 +225,18 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
             raise ApiError(409, "UNSUPPORTED", f"cannot convert .{ext} files")
         await app.state.worker.route(asset_id, "asset.updated" if ext == "blend" else None)
         return Response(status_code=202)
+
+    @app.get("/api/queue")
+    async def queue_state() -> dict:
+        return app.state.worker.state()
+
+    @app.post("/api/queue/pause")
+    async def pause_queue() -> dict:
+        return app.state.worker.set_paused(True)
+
+    @app.post("/api/queue/resume")
+    async def resume_queue() -> dict:
+        return app.state.worker.set_paused(False)
 
     @app.get("/api/apps")
     async def list_apps() -> list[dict]:

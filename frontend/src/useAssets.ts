@@ -79,7 +79,9 @@ export function useAssets(filters: AssetFilters) {
     return () => inflight.current?.abort();
   }, [library_id, q, ext, favorite, tag, refetch]);
 
-  useEvents((ev) => setPage((p) => applyEvent(p, ev, current.current)), refetch);
+  useEvents((ev) => {
+    if (ev.type !== "queue.updated") setPage((p) => applyEvent(p, ev, current.current));
+  }, refetch);
 
   const update = useCallback(
     (a: Asset) => setPage((p) => applyEvent(p, { type: "asset.updated", asset_id: a.id, data: a }, current.current)),

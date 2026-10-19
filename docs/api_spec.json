@@ -3,7 +3,7 @@
   "info": {
     "title": "3D DAM daemon",
     "version": "0.1.0",
-    "description": "Local daemon API. Binds 127.0.0.1:8765 only. JSON is snake_case, timestamps are integer Unix epoch seconds, ids are integers (App ids are strings). Every non-2xx JSON response uses the Error envelope.\n\nWebSocket: ws://127.0.0.1:8765/ws/events, server to client only. Each message is an Event (see components.schemas.Event). type is one of asset.added, asset.updated, asset.removed, conversion.started, conversion.done, conversion.failed. data is always the full Asset (last known state for asset.removed; status converting for conversion.started; status failed with error for conversion.failed). Events are not replayed; clients refetch GET /assets on reconnect."
+    "description": "Local daemon API. Binds 127.0.0.1:8765 only. JSON is snake_case, timestamps are integer Unix epoch seconds, ids are integers (App ids are strings). Every non-2xx JSON response uses the Error envelope.\n\nWebSocket: ws://127.0.0.1:8765/ws/events, server to client only. Each message is an Event or a QueueEvent (see components.schemas). Event type is one of asset.added, asset.updated, asset.removed, conversion.started, conversion.done, conversion.failed. data is always the full Asset (last known state for asset.removed; status converting for conversion.started; status failed with error for conversion.failed). QueueEvent (type queue.updated, no asset_id) carries the QueueState whenever its counts or paused flag change, coalesced to at most one per 100 ms. Events are not replayed; clients refetch GET /assets on reconnect."
   },
   "servers": [
     {
@@ -282,6 +282,60 @@
           },
           "409": {
             "$ref": "#/components/responses/Unsupported"
+          }
+        }
+      }
+    },
+    "/queue": {
+      "get": {
+        "operationId": "getQueue",
+        "description": "Blender conversion queue state.",
+        "responses": {
+          "200": {
+            "description": "Queue state",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queue/pause": {
+      "post": {
+        "operationId": "pauseQueue",
+        "description": "Stops starting new Blender jobs; running jobs finish. In memory only: a daemon restart resumes the queue.",
+        "responses": {
+          "200": {
+            "description": "Queue state after pausing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/queue/resume": {
+      "post": {
+        "operationId": "resumeQueue",
+        "description": "Starts queued Blender jobs again.",
+        "responses": {
+          "200": {
+            "description": "Queue state after resuming",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueueState"
+                }
+              }
+            }
           }
         }
       }
@@ -1037,6 +1091,42 @@
           },
           "installed": {
             "type": "boolean"
+          }
+        }
+      },
+      "QueueState": {
+        "type": "object",
+        "required": [
+          "queued",
+          "running",
+          "paused"
+        ],
+        "properties": {
+          "queued": {
+            "type": "integer",
+            "description": "Assets waiting for a Blender job"
+          },
+          "running": {
+            "type": "integer",
+            "description": "Blender jobs in progress"
+          },
+          "paused": {
+            "type": "boolean"
+          }
+        }
+      },
+      "QueueEvent": {
+        "type": "object",
+        "required": [
+          "type",
+          "data"
+        ],
+        "properties": {
+          "type": {
+            "const": "queue.updated"
+          },
+          "data": {
+            "$ref": "#/components/schemas/QueueState"
           }
         }
       }

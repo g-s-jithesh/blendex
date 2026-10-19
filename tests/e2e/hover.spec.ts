@@ -110,6 +110,7 @@ async function setup(page: Page) {
     if (path === "/api/libraries") return route.fulfill({ json: [{ id: 1, path: "C:/lib", created_at: 1 }] });
     if (["/api/apps", "/api/sessions", "/api/bridges", "/api/tags"].includes(path)) return route.fulfill({ json: [] });
     if (path === "/api/assets") return route.fulfill({ json: { items: ASSETS, total: N } });
+    if (path === "/api/queue") return route.fulfill({ json: { queued: 0, running: 0, paused: false } });
     return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND", message: path } } });
   });
   await page.goto("/?debug=1");

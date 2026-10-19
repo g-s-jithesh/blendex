@@ -24,6 +24,7 @@ test("a running Blender session shows up in the card menu and receives the impor
     if (path === "/api/apps") return route.fulfill({ json: APPS });
     if (path === "/api/bridges") return route.fulfill({ json: [{ app_id: "blender-5.2", name: "Blender 5.2", installed: true }] });
     if (path === "/api/assets") return route.fulfill({ json: { items: ASSETS, total: ASSETS.length } });
+    if (path === "/api/queue") return route.fulfill({ json: { queued: 0, running: 0, paused: false } });
     if (path === "/api/sessions") return route.fulfill({ json: [SESSION] });
     if (path === "/api/tags") return route.fulfill({ json: [] });
     if (path === "/api/sessions/blender-77/import") {

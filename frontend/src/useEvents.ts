@@ -1,9 +1,9 @@
 import { useEffect, useRef } from "react";
-import type { AssetEvent } from "./api";
+import type { ServerEvent } from "./api";
 
 export const EVENTS_PATH = "/ws/events";
 
-export function useEvents(onEvent: (e: AssetEvent) => void, onReconnect: () => void): void {
+export function useEvents(onEvent: (e: ServerEvent) => void, onReconnect: () => void): void {
   const handlers = useRef({ onEvent, onReconnect });
   handlers.current = { onEvent, onReconnect };
 
@@ -22,7 +22,7 @@ export function useEvents(onEvent: (e: AssetEvent) => void, onReconnect: () => v
       };
       ws.onmessage = (m) => {
         try {
-          handlers.current.onEvent(JSON.parse(String(m.data)) as AssetEvent);
+          handlers.current.onEvent(JSON.parse(String(m.data)) as ServerEvent);
         } catch {
           return;
         }

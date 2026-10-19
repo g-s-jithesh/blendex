@@ -79,18 +79,45 @@ def _read_meta(path: str) -> dict:
 
 
 class Worker:
-    def __init__(self, conn: sqlite3.Connection, publish: Callable[[str, dict | None], None]):
-        self.conn, self.publish = conn, publish
+    def __init__(self, conn: sqlite3.Connection, publish: Callable[[str, dict | None], None],
+                 on_queue: Callable[[dict], None]):
+        self.conn, self.publish, self.on_queue = conn, publish, on_queue
         self.queue: asyncio.Queue[int] = asyncio.Queue()
         self.queued: set[int] = set()
         self.running = 0
+        self.unpaused = asyncio.Event()
+        self.unpaused.set()
+        self.sent: dict | None = None
+        self.flush: asyncio.TimerHandle | None = None
         self.procs: set[asyncio.subprocess.Process] = set()
         self.concurrency = int(os.environ.get("DAM_WORKERS") or max(1, (os.cpu_count() or 1) // 4))
         self.timeout = float(os.environ.get("DAM_JOB_TIMEOUT") or 600)
         self.tasks: list[asyncio.Task] = []
 
     def busy(self) -> bool:
-        return bool(self.queued or self.running)
+        return bool(self.running or (self.queued and self.unpaused.is_set()))
+
+    def state(self) -> dict:
+        return {"queued": len(self.queued), "running": self.running, "paused": not self.unpaused.is_set()}
+
+    def set_paused(self, paused: bool) -> dict:
+        if paused:
+            self.unpaused.clear()
+        else:
+            self.unpaused.set()
+        self._changed()
+        return self.state()
+
+    def _changed(self) -> None:
+        if not self.flush:
+            # Coalesce a burst (e.g. a scan queueing thousands of assets) into one queue.updated event.
+            self.flush = asyncio.get_running_loop().call_later(0.1, self._send_state)
+
+    def _send_state(self) -> None:
+        self.flush = None
+        if (state := self.state()) != self.sent:
+            self.sent = state
+            self.on_queue(state)
 
     def start(self) -> None:
         self.tasks = [asyncio.create_task(self._loop()) for _ in range(self.concurrency)]
@@ -99,11 +126,14 @@ class Worker:
         for t in self.tasks:
             t.cancel()
         await asyncio.gather(*self.tasks, return_exceptions=True)
+        if self.flush:
+            self.flush.cancel()
 
     def enqueue(self, asset_id: int) -> None:
         if asset_id not in self.queued:
             self.queued.add(asset_id)
             self.queue.put_nowait(asset_id)
+            self._changed()
 
     async def route(self, asset_id: int, event: str | None = None) -> None:
         asset = db.get_asset(self.conn, asset_id)
@@ -123,8 +153,10 @@ class Worker:
     async def _loop(self) -> None:
         while True:
             asset_id = await self.queue.get()
+            await self.unpaused.wait()
             self.queued.discard(asset_id)
             self.running += 1
+            self._changed()
             try:
                 await self.convert(asset_id)
             except Exception as e:
@@ -135,6 +167,7 @@ class Worker:
                     self._emit("conversion.failed", asset_id)
             finally:
                 self.running -= 1
+                self._changed()
 
     def _emit(self, event: str, asset_id: int) -> None:
         self.conn.commit()

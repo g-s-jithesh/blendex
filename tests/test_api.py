@@ -1,3 +1,4 @@
+import itertools
 import json
 import os
 import re
@@ -593,4 +594,29 @@ def test_ws_two_clients_both_receive(daemon, lib):
             for ws in (w1, w2):
                 assert ws_until(ws, lambda ev: bool(ev))[0]["type"] == "asset.added"
         wait_until(lambda: not app.state.clients)
+        drain(app, c)
+
+
+def queue_seen(**want):
+    return lambda ev: any(e["type"] == "queue.updated" and e["data"] | want == e["data"] for e in ev)
+
+
+def test_ws_queue_updated_events(daemon, lib, monkeypatch):
+    monkeypatch.setenv("FAKE_BLENDER_SLEEP", "0.5")
+    write(lib / "a.obj", b"o 1")
+    with daemon() as (app, c), c.websocket_connect("/ws/events") as ws:
+        c.post("/api/queue/pause")
+        ev = ws_until(ws, bool, queue=True)
+        assert ev == [{"type": "queue.updated", "data": {"queued": 0, "running": 0, "paused": True}}]
+        assert_shape(ev[0], "QueueEvent")
+        add_library(c, lib)
+        ev = ws_until(ws, queue_seen(queued=1), queue=True)
+        c.post("/api/queue/resume")
+        ev += ws_until(ws, queue_seen(running=1), queue=True)
+        ev += ws_until(ws, queue_seen(running=0, paused=False), queue=True)
+        queue_events = [e for e in ev if e["type"] == "queue.updated"]
+        for e in queue_events:
+            assert_shape(e, "QueueEvent")
+        assert queue_events[-1]["data"] == {"queued": 0, "running": 0, "paused": False}
+        assert all(a != b for a, b in itertools.pairwise(queue_events))
         drain(app, c)

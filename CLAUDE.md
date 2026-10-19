@@ -61,6 +61,9 @@ PLAN.md            Single source of truth for phases, tasks, decisions, status
 | PUT | `/assets/{id}/favorite` | `{"favorite": bool}` | `Asset` (broadcasts `asset.updated`) |
 | PUT | `/assets/{id}/tags` | `{"tags": str[]}` (replaces the set) | `Asset` (broadcasts `asset.updated`) |
 | GET | `/tags` | — | `{"tag": str, "count": int}[]` sorted by tag |
+| GET | `/queue` | — | `QueueState` |
+| POST | `/queue/pause` | — | `QueueState` (no new Blender jobs start; running ones finish) |
+| POST | `/queue/resume` | — | `QueueState` |
 | GET | `/apps` | — | `App[]` (detected DCC executables) |
 | POST | `/launch` | `{"asset_id": int, "app_id": str}` | `202` |
 | GET | `/sessions` | — | `Session[]` (running Blenders with the bridge; dead session files are deleted) |
@@ -110,6 +113,7 @@ type TagCount = { tag: string; count: number };
 type App = { id: string; name: string; version: string | null; executable: string; exts: string[] };
 type Session = { id: string; app: string; version: string | null; pid: number; file: string | null; exts: string[] };
 type Bridge = { app_id: string; name: string; installed: boolean };
+type QueueState = { queued: number; running: number; paused: boolean };
 ```
 
 ### Open with / import
@@ -123,7 +127,9 @@ type Bridge = { app_id: string; name: string; installed: boolean };
 
 `{"type": <event>, "asset_id": int, "data": {...}}` where `<event>` is one of
 `asset.added`, `asset.updated`, `asset.removed`, `conversion.started`, `conversion.done`, `conversion.failed`.
-`data` is always the full `Asset` (last known state for `asset.removed`). Clients refetch on reconnect; events are not replayed.
+`data` is always the full `Asset` (last known state for `asset.removed`).
+The one non-asset event is `{"type": "queue.updated", "data": QueueState}` (no `asset_id`), sent when queue counts or `paused` change, coalesced to at most one per 100 ms. Pause is in memory only; a daemon restart resumes the queue.
+Clients refetch on reconnect; events are not replayed.
 
 Contract changes go through the architect: update this section and `PLAN.md` → Decisions in the same change.
 
