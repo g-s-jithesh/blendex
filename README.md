@@ -32,7 +32,7 @@ Measured on a laptop with an NVIDIA RTX 3050 Laptop GPU and Intel UHD Graphics, 
 |---|---|---|---|
 | Open, browsing thumbnails | ~190 MB | 0 MB | ~38 MB |
 | 3D preview open (15,744-triangle model) | ~250 MB | 0 MB | ~59 MB |
-| After the preview closes | ~250 MB | 0 MB | ~44 MB |
+| After the preview closes | ~210 MB | 0 MB | ~44 MB |
 
 For comparison, version 1.0.1, which opened in an Edge browser window, used about 1,300 MB of RAM across 21 processes.
 
@@ -45,7 +45,7 @@ Why it stays small:
 - **Thumbnails without Blender.** For `.blend` files, the preview image Blender stores inside the file is read directly, in about 1 ms, before any Blender process starts.
 - **Background work is capped.** Blender conversions run at most a quarter of your CPU cores at a time (configurable, see [Configuration](#configuration)).
 
-RAM stays at about 250 MB after a preview closes because the web engine keeps its caches. Your numbers will vary with the size of the models you preview.
+Each preview decodes its model in a Draco decoder worker that is shut down as soon as the model is loaded. RAM settles about 20 MB above the idle number within half a minute of a preview closing, because the web engine keeps the 3D code and some caches loaded. Your numbers will vary with the size of the models you preview.
 
 ## Using Blendex
 

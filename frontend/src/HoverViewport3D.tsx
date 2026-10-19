@@ -20,10 +20,6 @@ export type Proxy3D = {
 
 export const PARSE_TIMEOUT_MS = 30_000;
 
-// three 0.182's DRACOLoader has no default decoder path; public/draco is three's own decoder, served offline.
-let gltfLoader: GLTFLoader | null = null;
-const loader = () => (gltfLoader ??= new GLTFLoader().setDRACOLoader(new DRACOLoader().setDecoderPath("/draco/")));
-
 export function prepareProxy(root: Object3D): Proxy3D {
   const meshes: Proxy3D["meshes"] = [];
   let triangles = 0;
@@ -43,11 +39,21 @@ export function prepareProxy(root: Object3D): Proxy3D {
 export async function loadProxy(url: string, signal: AbortSignal): Promise<Proxy3D> {
   const res = await fetch(url, { signal });
   if (!res.ok) throw new Error(`Proxy fetch failed: HTTP ${res.status}`);
-  const timeout = new Promise<never>((_, reject) =>
-    setTimeout(() => reject(new Error("Preview timed out while decoding the model")), PARSE_TIMEOUT_MS),
-  );
-  const gltf = await Promise.race([loader().parseAsync(await res.arrayBuffer(), ""), timeout]);
-  return prepareProxy(gltf.scene);
+  const data = await res.arrayBuffer();
+  // three 0.182's DRACOLoader has no default decoder path; public/draco is three's own decoder, served offline.
+  const draco = new DRACOLoader().setDecoderPath("/draco/");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error("Preview timed out while decoding the model")), PARSE_TIMEOUT_MS);
+  });
+  try {
+    const gltf = await Promise.race([new GLTFLoader().setDRACOLoader(draco).parseAsync(data, ""), timeout]);
+    return prepareProxy(gltf.scene);
+  } finally {
+    clearTimeout(timer);
+    // A pooled loader keeps up to 4 decoder workers, each holding its own WASM heap, alive for the whole session.
+    draco.dispose();
+  }
 }
 
 export function applyLook(p: Proxy3D, clay: boolean, wireframe: boolean): void {
