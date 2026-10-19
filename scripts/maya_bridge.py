@@ -123,10 +123,10 @@ def initializePlugin(plugin: om.MObject) -> None:
     threading.Thread(target=server.serve_forever, daemon=True).start()
     token = secrets.token_hex(16)
     folder = sessions_dir()
-    folder.mkdir(parents=True, exist_ok=True)
+    folder.mkdir(mode=0o700, parents=True, exist_ok=True)
     session_file = folder / f"maya-{os.getpid()}.json"
-    session_file.write_text(json.dumps({"app": "maya", "pid": os.getpid(), "port": server.server_address[1],
-                                        "token": token}), encoding="utf-8")
+    with os.fdopen(os.open(session_file, os.O_CREAT | os.O_WRONLY | os.O_TRUNC, 0o600), "w", encoding="utf-8") as f:
+        json.dump({"app": "maya", "pid": os.getpid(), "port": server.server_address[1], "token": token}, f)
     _state.update(server=server, token=token, file=session_file,
                   exit_cb=om.MSceneMessage.addCallback(om.MSceneMessage.kMayaExiting, stop))
 

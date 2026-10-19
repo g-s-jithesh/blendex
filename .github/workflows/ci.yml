@@ -14,8 +14,12 @@ concurrency:
 
 jobs:
   backend:
-    name: Backend (ruff + pytest)
-    runs-on: windows-latest
+    name: Backend (ruff + pytest)${{ matrix.os == 'ubuntu-latest' && ' (Linux)' || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@v5
@@ -28,8 +32,12 @@ jobs:
       - run: python -m pytest -m "not blender"
 
   frontend:
-    name: Frontend (build + vitest)
-    runs-on: windows-latest
+    name: Frontend (build + vitest)${{ matrix.os == 'ubuntu-latest' && ' (Linux)' || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v5
@@ -43,8 +51,12 @@ jobs:
       - run: npm --prefix frontend run test
 
   e2e:
-    name: Browser (Playwright WebGL)
-    runs-on: windows-latest
+    name: Browser (Playwright WebGL)${{ matrix.os == 'ubuntu-latest' && ' (Linux)' || '' }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
