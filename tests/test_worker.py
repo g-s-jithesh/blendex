@@ -1,3 +1,4 @@
+import os
 import time
 
 from conftest import (
@@ -9,6 +10,7 @@ from conftest import (
     items,
     no_fake_procs,
     preview_blend,
+    settle,
     spawned,
     spawns,
     wait_until,
@@ -179,3 +181,36 @@ def test_shutdown_while_paused_leaves_no_processes_and_restart_resumes(daemon, l
         drain(app, c)
         assert {a["status"] for a in items(c)} == {"ready"}
     assert spawns(spawn_log) == 8
+
+
+def test_on_demand_indexing_spawns_nothing_until_requested(daemon, lib, monkeypatch, spawn_log):
+    monkeypatch.delenv("DAM_CONVERT")
+    for i in range(30):
+        (lib / f"m{i:02}.obj").write_bytes(b"o")
+    (lib / "p.blend").write_bytes(preview_blend())
+    (lib / "a.blend").write_bytes(blend("4.2"))
+    with daemon() as (app, c):
+        add_library(c, lib)
+        drain(app, c)
+        got = by_name(c)
+        assert len(got) == 32 and {a["status"] for a in got.values()} == {"pending"}
+        assert spawns(spawn_log) == 0 and queue(c)["queued"] == 0
+        assert got["p.blend"]["has_thumbnail"] and not got["a.blend"]["has_thumbnail"]
+        assert c.get(f"/api/assets/{got['p.blend']['id']}/thumbnail").status_code == 200
+
+        mid = got["m07.obj"]["id"]
+        c.post("/api/queue/pause")
+        for _ in range(3):
+            assert c.post(f"/api/assets/{mid}/convert").status_code == 202
+        assert queue(c)["queued"] == 1
+        c.post("/api/queue/resume")
+        drain(app, c)
+        assert spawned(spawn_log) == [("m07.obj", "full")]
+        assert c.get(f"/api/assets/{mid}").json()["status"] == "ready"
+
+        os.utime(lib / "m07.obj", (1_700_000_000, 1_700_000_000))
+        settle(app, c)
+        assert c.get(f"/api/assets/{mid}").json()["status"] == "pending" and spawns(spawn_log) == 1
+    with daemon() as (app, c):
+        drain(app, c)
+        assert spawns(spawn_log) == 1 and len(items(c)) == 32

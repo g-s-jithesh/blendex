@@ -66,8 +66,9 @@ class _Handler(FileSystemEventHandler):
 
 class Indexer:
     def __init__(self, conn: sqlite3.Connection, publish: Callable[[str, dict | None], None],
-                 route: Callable[[int, str | None], Awaitable[None]]):
+                 route: Callable[[int, str | None, bool], Awaitable[None]]):
         self.conn, self.publish, self.route = conn, publish, route
+        self.eager = os.environ.get("DAM_CONVERT") == "all"
         self.observers: dict[int, Observer] = {}
         self.timers: dict[str, asyncio.TimerHandle] = {}
         self.tasks: set[asyncio.Task] = set()
@@ -89,9 +90,9 @@ class Indexer:
 
     async def _initial(self, lib: dict) -> None:
         routed = await self.sync(lib, lib["path"])
-        for asset_id in db.reroute_ids(self.conn, lib["id"]):
+        for asset_id in db.reroute_ids(self.conn, lib["id"]) if self.eager else []:
             if asset_id not in routed:
-                await self.route(asset_id, "asset.updated")
+                await self.route(asset_id, "asset.updated", True)
 
     def unwatch(self, library_id: int) -> None:
         if obs := self.observers.pop(library_id, None):
@@ -136,7 +137,7 @@ class Indexer:
         for asset_id, created, path in changed:
             event = "asset.added" if created else "asset.updated"
             if _ext(path) in CONVERTIBLE:
-                await self.route(asset_id, event)
+                await self.route(asset_id, event, self.eager)
             else:
                 self.publish(event, db.get_asset(self.conn, asset_id))
         return {asset_id for asset_id, _, _ in changed}

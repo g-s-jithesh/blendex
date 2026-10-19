@@ -135,7 +135,7 @@ class Worker:
             self.queue.put_nowait(asset_id)
             self._changed()
 
-    async def route(self, asset_id: int, event: str | None = None) -> None:
+    async def route(self, asset_id: int, event: str | None = None, convert: bool = True) -> None:
         asset = db.get_asset(self.conn, asset_id)
         if not asset or asset["ext"] not in CONVERTIBLE:
             return
@@ -148,7 +148,8 @@ class Worker:
                 self.conn.commit()
         if event:
             self.publish(event, db.get_asset(self.conn, asset_id))
-        self.enqueue(asset_id)
+        if convert:
+            self.enqueue(asset_id)
 
     async def _loop(self) -> None:
         while True:

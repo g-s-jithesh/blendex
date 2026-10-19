@@ -43,6 +43,7 @@ Why it stays small:
 - **Small proxies.** Previews load a decimated (50% of triangles) and Draco-compressed `.glb` copy of the model, never the original file.
 - **Integrated GPU first.** On laptops with two GPUs, Windows draws the window on the integrated GPU, so the dedicated card's VRAM stays free for Blender. In the run above, no dedicated VRAM was used.
 - **Thumbnails without Blender.** For `.blend` files, the preview image Blender stores inside the file is read directly, in about 1 ms, before any Blender process starts.
+- **Only what you look at is converted.** Adding a library starts no Blender process. A card is sent to Blender once it has been at least half on screen for 0.4 s, or when you hover it, so scrolling quickly past thousands of files starts nothing. In a test library of 30 `.obj` files, adding it started 30 Blender jobs before this change and 0 now. Set `DAM_CONVERT=all` to convert everything up front (see [Configuration](#configuration)).
 - **Background work is capped.** Blender conversions run at most a quarter of your CPU cores at a time (configurable, see [Configuration](#configuration)).
 
 Each preview decodes its model in a Draco decoder worker that is shut down as soon as the model is loaded. RAM settles about 20 MB above the idle number within half a minute of a preview closing, because the web engine keeps the 3D code and some caches loaded. Your numbers will vary with the size of the models you preview.
@@ -113,6 +114,7 @@ Optional environment variables (set them before starting Blendex):
 | `DAM_BLENDER` | newest detected Blender | Full path to the `blender.exe` used for thumbnails and previews |
 | `DAM_WORKERS` | a quarter of your CPU cores (at least 1) | How many Blender conversions run at once |
 | `DAM_JOB_TIMEOUT` | `600` | Seconds before a stuck conversion is stopped |
+| `DAM_CONVERT` | on demand | `all` converts every `.blend`, `.obj` and `.fbx` as soon as it is indexed, instead of only the cards you scroll to or hover |
 | `DAM_DB` | `%APPDATA%\dam\dam.sqlite` | Location of the library index |
 
 ## Known limitations

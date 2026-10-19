@@ -240,6 +240,7 @@ def daemon(tmp_path, monkeypatch, spawn_log):
     monkeypatch.setattr(indexer, "DEBOUNCE", 0.2)
     monkeypatch.setenv("DAM_BLENDER", str(FAKE))
     monkeypatch.setenv("DAM_WORKERS", "2")
+    monkeypatch.setenv("DAM_CONVERT", "all")
     monkeypatch.setenv("FAKE_BLENDER_LOG", str(spawn_log))
     for k in ("DAM_DB", "DAM_JOB_TIMEOUT", "FAKE_BLENDER_SLEEP", "FAKE_BLENDER_FAIL"):
         monkeypatch.delenv(k, raising=False)

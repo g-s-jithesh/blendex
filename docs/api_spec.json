@@ -272,7 +272,7 @@
       ],
       "post": {
         "operationId": "convertAsset",
-        "description": "Re-runs preview routing: blend re-extracts the embedded preview, then blend/obj/fbx queue a full Blender job. Blender jobs report via conversion.* events. Other exts: 409 UNSUPPORTED.",
+        "description": "Re-runs preview routing: blend re-extracts the embedded preview, then blend/obj/fbx queue a full Blender job (a no-op while that asset is already queued). Conversion is on demand by default: indexing leaves blend/obj/fbx pending and the UI calls this for pending cards that are on screen or hovered; with DAM_CONVERT=all the indexer queues every job itself. Blender jobs report via conversion.* events. Other exts: 409 UNSUPPORTED.",
         "responses": {
           "202": {
             "description": "Queued"
@@ -782,7 +782,8 @@
           "ready",
           "failed",
           "unsupported"
-        ]
+        ],
+        "description": "pending: waiting for a Blender job; by default one starts only when POST /assets/{id}/convert asks for it"
       },
       "Asset": {
         "type": "object",
