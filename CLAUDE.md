@@ -42,7 +42,8 @@ PLAN.md            Single source of truth for phases, tasks, decisions, status
 - Base URL `http://127.0.0.1:8765/api`, WebSocket `ws://127.0.0.1:8765/ws/events`.
 - All JSON uses `snake_case`. Timestamps are integer Unix epoch seconds. IDs are integers.
 - Errors: HTTP status + `{"error": {"code": "<SNAKE_CODE>", "message": "<human text>"}}`. Codes: `VALIDATION_ERROR` 422 (FastAPI's default 422 body is overridden), `INVALID_PATH` 422, `NOT_FOUND` 404, `ALREADY_EXISTS` 409, `UNSUPPORTED` 409 (ext not convertible / not opened by that app), `LAUNCH_FAILED` 500, `BRIDGE_FAILED` 502 (a Blender session or bridge install failed), `INTERNAL` 500.
-- `ext` is lowercase without the dot (`blend`). `GET /assets` orders by `name, id`; `q` is a case-insensitive substring match on `name`.
+- `ext` is lowercase without the dot (`blend`). `GET /assets` orders by `name, id`; `q` is a case-insensitive substring match on `name`; `favorite=true|false` and `tag=<tag>` (exact, case-insensitive) filter.
+- Tags are trimmed, lowercased and de-duplicated; each is 1–40 printable characters without commas, at most 20 per asset; violations are `VALIDATION_ERROR`.
 
 ### REST
 
@@ -52,11 +53,14 @@ PLAN.md            Single source of truth for phases, tasks, decisions, status
 | GET | `/libraries` | — | `Library[]` |
 | POST | `/libraries` | `{"path": str}` | `201 Library` (starts initial scan) |
 | DELETE | `/libraries/{id}` | — | `204` (removes index rows, never user files) |
-| GET | `/assets` | `library_id?, q?, ext?, limit=100, offset=0` | `{"items": Asset[], "total": int}` |
+| GET | `/assets` | `library_id?, q?, ext?, favorite?, tag?, limit=100, offset=0` | `{"items": Asset[], "total": int}` |
 | GET | `/assets/{id}` | — | `Asset` |
 | GET | `/assets/{id}/thumbnail` | `v?` (ignored) | `image/png` or `404` |
 | GET | `/assets/{id}/proxy` | `v?` (ignored) | `model/gltf-binary` or `404` |
 | POST | `/assets/{id}/convert` | — | `202` (re-queue conversion) |
+| PUT | `/assets/{id}/favorite` | `{"favorite": bool}` | `Asset` (broadcasts `asset.updated`) |
+| PUT | `/assets/{id}/tags` | `{"tags": str[]}` (replaces the set) | `Asset` (broadcasts `asset.updated`) |
+| GET | `/tags` | — | `{"tag": str, "count": int}[]` sorted by tag |
 | GET | `/apps` | — | `App[]` (detected DCC executables) |
 | POST | `/launch` | `{"asset_id": int, "app_id": str}` | `202` |
 | GET | `/sessions` | — | `Session[]` (running Blenders with the bridge; dead session files are deleted) |
@@ -100,8 +104,9 @@ type Asset = {
   id: number; library_id: number; path: string; name: string; ext: string;
   size: number; mtime: number; dcc_version: string | null;
   status: AssetStatus; poly_count: number | null; error: string | null;
-  has_thumbnail: boolean; has_proxy: boolean;
+  has_thumbnail: boolean; has_proxy: boolean; favorite: boolean; tags: string[];
 };
+type TagCount = { tag: string; count: number };
 type App = { id: string; name: string; version: string | null; executable: string; exts: string[] };
 type Session = { id: string; app: string; version: string | null; pid: number; file: string | null; exts: string[] };
 type Bridge = { app_id: string; name: string; installed: boolean };
@@ -129,7 +134,7 @@ Contract changes go through the architect: update this section and `PLAN.md` →
 - Tables are `STRICT`. `INTEGER PRIMARY KEY` ids. Foreign keys with `ON DELETE CASCADE`.
 - Paths stored absolute, resolved, forward-slash normalized; `UNIQUE` on `assets.path`.
 - Change detection by `(size, mtime)`; no content hashing on the hot path.
-- Schema (`001_init.sql`): `libraries`, `assets` (identity + `current_version_id`), `versions` (one row per seen `(size, mtime)`: header `dcc_version`, poly counts, conversion `status`/`error`, `has_thumbnail`/`has_proxy`), `dcc_apps` (`exts` is JSON text). The API `Asset` is `assets JOIN versions ON current_version_id`; revision history is not exposed.
+- Schema (`001_init.sql`): `libraries`, `assets` (identity + `current_version_id`), `versions` (one row per seen `(size, mtime)`: header `dcc_version`, poly counts, conversion `status`/`error`, `has_thumbnail`/`has_proxy`), `dcc_apps` (`exts` is JSON text). `002_favorites_tags.sql` adds `assets.favorite` (0/1) and `asset_tags(asset_id, tag)` (cascade on asset delete, index on `tag`); both belong to the asset identity, so they survive file edits. The API `Asset` is `assets JOIN versions ON current_version_id` plus its tags; revision history is not exposed.
 - Schema changes only via a new numbered file in `backend/migrations/`; applied in order, tracked with `PRAGMA user_version`. Never edit a shipped migration.
 - Parameterized queries only. No string-built SQL.
 

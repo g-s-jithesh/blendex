@@ -7,7 +7,8 @@ from pathlib import Path
 MIGRATIONS = Path(__file__).parent / "migrations"
 ASSET_SQL = (
     "SELECT a.id, a.library_id, a.path, a.name, a.ext, v.size, v.mtime, v.dcc_version, v.status,"
-    " v.poly_count, v.error, v.has_thumbnail, v.has_proxy"
+    " v.poly_count, v.error, v.has_thumbnail, v.has_proxy, a.favorite,"
+    " (SELECT json_group_array(t.tag) FROM asset_tags t WHERE t.asset_id = a.id) AS tags"
     " FROM assets a JOIN versions v ON v.id = a.current_version_id"
 )
 UNDER = "(a.path = ? OR substr(a.path, 1, length(?)) = ?)"
@@ -51,6 +52,7 @@ def _assets(cur: sqlite3.Cursor) -> list[dict]:
     rows = _dicts(cur)
     for d in rows:
         d["has_thumbnail"], d["has_proxy"] = bool(d["has_thumbnail"]), bool(d["has_proxy"])
+        d["favorite"], d["tags"] = bool(d["favorite"]), sorted(json.loads(d["tags"]))
     return rows
 
 
@@ -78,17 +80,33 @@ def get_asset(conn: sqlite3.Connection, asset_id: int) -> dict | None:
 
 
 def list_assets(conn: sqlite3.Connection, library_id: int | None = None, q: str | None = None,
-                ext: str | None = None, limit: int = 100, offset: int = 0) -> tuple[list[dict], int]:
+                ext: str | None = None, limit: int = 100, offset: int = 0, favorite: bool | None = None,
+                tag: str | None = None) -> tuple[list[dict], int]:
     where = (
         " WHERE (? IS NULL OR a.library_id = ?) AND (? IS NULL OR instr(lower(a.name), lower(?)) > 0)"
-        " AND (? IS NULL OR a.ext = lower(?))"
+        " AND (? IS NULL OR a.ext = lower(?)) AND (? IS NULL OR a.favorite = ?)"
+        " AND (? IS NULL OR EXISTS (SELECT 1 FROM asset_tags t WHERE t.asset_id = a.id AND t.tag = ?))"
     )
-    args = (library_id, library_id, q, q, ext, ext)
+    fav = None if favorite is None else int(favorite)
+    args = (library_id, library_id, q, q, ext, ext, fav, fav, tag, tag)
     rows = conn.execute(ASSET_SQL + where + " ORDER BY a.name, a.id LIMIT ? OFFSET ?", (*args, limit, offset))
     total = conn.execute(
         "SELECT count(*) FROM assets a JOIN versions v ON v.id = a.current_version_id" + where, args
     ).fetchone()[0]
     return _assets(rows), total
+
+
+def set_favorite(conn: sqlite3.Connection, asset_id: int, favorite: bool) -> None:
+    conn.execute("UPDATE assets SET favorite = ? WHERE id = ?", (int(favorite), asset_id))
+
+
+def set_tags(conn: sqlite3.Connection, asset_id: int, tags: list[str]) -> None:
+    conn.execute("DELETE FROM asset_tags WHERE asset_id = ?", (asset_id,))
+    conn.executemany("INSERT INTO asset_tags (asset_id, tag) VALUES (?, ?)", [(asset_id, t) for t in tags])
+
+
+def list_tags(conn: sqlite3.Connection) -> list[dict]:
+    return _dicts(conn.execute("SELECT tag, count(*) AS count FROM asset_tags GROUP BY tag ORDER BY tag"))
 
 
 def current_version_id(conn: sqlite3.Connection, asset_id: int) -> int | None:

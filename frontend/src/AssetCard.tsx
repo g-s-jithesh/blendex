@@ -1,5 +1,6 @@
-import { memo, useState } from "react";
+import { memo, useState, type FormEvent } from "react";
 import { api, errorText, thumbnailUrl, type App, type Asset, type AssetStatus, type Session } from "./api";
+import { normalizeTag } from "./useAssets";
 
 const STATUS_LABEL: Record<AssetStatus, string> = {
   pending: "Pending",
@@ -19,15 +20,19 @@ function formatSize(bytes: number): string {
   return `${(bytes / 1024 ** 2).toFixed(1)} MB`;
 }
 
+export type EditAsset = (before: Asset, after: Asset, send: () => Promise<Asset>) => void;
+
 type Props = {
   asset: Asset;
   apps: App[];
+  onEdit: EditAsset;
   onHoverStart: (asset: Asset, el: HTMLElement) => void;
   onHoverEnd: (related: EventTarget | null) => void;
 };
 
-export const AssetCard = memo(function AssetCard({ asset, apps, onHoverStart, onHoverEnd }: Props) {
+export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverStart, onHoverEnd }: Props) {
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
+  const [tagInput, setTagInput] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
   const openers = apps.filter((a) => a.exts.includes(asset.ext));
   const importers = sessions.filter((s) => s.exts.includes(asset.ext));
@@ -41,6 +46,16 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onHoverStart, on
       ({ imported }) => setNote({ text: `Imported ${imported.join(", ") || "nothing"} into ${sessionFile(s)}`, error: false }),
       (e: unknown) => setNote({ text: errorText(e), error: true }),
     );
+  };
+
+  const toggleFavorite = () =>
+    onEdit(asset, { ...asset, favorite: !asset.favorite }, () => api.setFavorite(asset.id, !asset.favorite));
+  const saveTags = (tags: string[]) => onEdit(asset, { ...asset, tags }, () => api.setTags(asset.id, tags));
+  const addTag = (e: FormEvent) => {
+    e.preventDefault();
+    const tag = normalizeTag(tagInput);
+    setTagInput("");
+    if (tag && !asset.tags.includes(tag)) saveTags([...asset.tags, tag].sort());
   };
 
   const launch = (app: App) => {
@@ -83,10 +98,47 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onHoverStart, on
         )}
       </div>
       <div className="flex flex-col gap-1 p-2 text-xs">
-        <div className="truncate font-medium text-neutral-100" title={asset.path}>{asset.name}</div>
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1 truncate font-medium text-neutral-100" title={asset.path}>{asset.name}</div>
+          <button
+            type="button"
+            aria-pressed={asset.favorite}
+            aria-label={`Favourite ${asset.name}`}
+            title={asset.favorite ? "Remove from favourites" : "Add to favourites"}
+            className={`rounded px-1 text-sm leading-none ${asset.favorite ? "text-amber-400" : "text-neutral-500 hover:text-neutral-200"}`}
+            onClick={toggleFavorite}
+          >
+            {asset.favorite ? "★" : "☆"}
+          </button>
+        </div>
         <div className="flex justify-between text-neutral-400">
           <span>.{asset.ext}{asset.dcc_version ? ` · v${asset.dcc_version}` : ""}</span>
           <span>{formatSize(asset.size)}</span>
+        </div>
+        <div className="flex flex-wrap items-center gap-1">
+          {asset.tags.map((t) => (
+            <span key={t} className="flex items-center gap-0.5 rounded bg-neutral-800 px-1 text-[10px] text-neutral-300">
+              {t}
+              <button
+                type="button"
+                aria-label={`Remove tag ${t}`}
+                className="text-neutral-500 hover:text-neutral-100"
+                onClick={() => saveTags(asset.tags.filter((x) => x !== t))}
+              >
+                ×
+              </button>
+            </span>
+          ))}
+          <form onSubmit={addTag} className="min-w-12 flex-1">
+            <input
+              aria-label={`Add tag to ${asset.name}`}
+              placeholder="+ tag"
+              maxLength={40}
+              className="w-full rounded bg-transparent px-1 text-[10px] text-neutral-300 placeholder:text-neutral-600 focus:bg-neutral-800"
+              value={tagInput}
+              onChange={(e) => setTagInput(e.target.value)}
+            />
+          </form>
         </div>
         {(openers.length > 0 || importers.length > 0) && (
           <select

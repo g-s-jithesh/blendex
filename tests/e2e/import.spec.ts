@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 
 const asset = (id: number, ext: string) => ({
   id, library_id: 1, path: `C:/lib/model-${id}.${ext}`, name: `model-${id}`, ext, size: 10, mtime: 1_700_000_000,
-  dcc_version: null, status: "ready", poly_count: 12, error: null, has_thumbnail: false, has_proxy: false,
+  dcc_version: null, status: "ready", poly_count: 12, error: null, has_thumbnail: false, has_proxy: false, favorite: false, tags: [],
 });
 const ASSETS = [asset(1, "obj"), asset(2, "ma")];
 const APPS = [
@@ -25,6 +25,7 @@ test("a running Blender session shows up in the card menu and receives the impor
     if (path === "/api/bridges") return route.fulfill({ json: [{ app_id: "blender-5.2", name: "Blender 5.2", installed: true }] });
     if (path === "/api/assets") return route.fulfill({ json: { items: ASSETS, total: ASSETS.length } });
     if (path === "/api/sessions") return route.fulfill({ json: [SESSION] });
+    if (path === "/api/tags") return route.fulfill({ json: [] });
     if (path === "/api/sessions/blender-77/import") {
       imports.push(req.postDataJSON());
       return route.fulfill({ json: { imported: ["Suzanne"] } });

@@ -7,7 +7,7 @@ from fastapi import FastAPI, Query, Request, WebSocket
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictBool, field_validator
 from starlette.exceptions import HTTPException
 
 from . import bridge, db, dcc
@@ -33,6 +33,25 @@ class LaunchRequest(BaseModel):
 
 class ImportRequest(BaseModel):
     asset_id: int
+
+
+class FavoriteUpdate(BaseModel):
+    favorite: StrictBool
+
+
+class TagsUpdate(BaseModel):
+    tags: list[str]
+
+    @field_validator("tags")
+    @classmethod
+    def normalize(cls, tags: list[str]) -> list[str]:
+        clean = sorted({t.strip().lower() for t in tags})
+        for t in clean:
+            if not 1 <= len(t) <= 40 or "," in t or not t.isprintable():
+                raise ValueError(f"invalid tag {t!r}: 1-40 printable characters, no commas")
+        if len(clean) > 20:
+            raise ValueError("at most 20 tags per asset")
+        return clean
 
 
 def _error(status: int, code: str, message: str) -> JSONResponse:
@@ -141,9 +160,34 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
 
     @app.get("/api/assets")
     async def list_assets(library_id: int | None = None, q: str | None = None, ext: str | None = None,
-                          limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0)) -> dict:
-        items, total = db.list_assets(app.state.conn, library_id, q, ext, limit, offset)
+                          limit: int = Query(100, ge=1, le=500), offset: int = Query(0, ge=0),
+                          favorite: bool | None = None, tag: str | None = None) -> dict:
+        tag = tag.strip().lower() if tag is not None else None
+        items, total = db.list_assets(app.state.conn, library_id, q, ext, limit, offset, favorite, tag)
         return {"items": items, "total": total}
+
+    def edited(asset_id: int) -> dict:
+        asset = db.get_asset(app.state.conn, asset_id)
+        app.state.publish("asset.updated", asset)
+        return asset
+
+    @app.put("/api/assets/{asset_id}/favorite")
+    async def set_favorite(asset_id: int, body: FavoriteUpdate) -> dict:
+        asset_or_404(asset_id)
+        with app.state.conn:
+            db.set_favorite(app.state.conn, asset_id, body.favorite)
+        return edited(asset_id)
+
+    @app.put("/api/assets/{asset_id}/tags")
+    async def set_tags(asset_id: int, body: TagsUpdate) -> dict:
+        asset_or_404(asset_id)
+        with app.state.conn:
+            db.set_tags(app.state.conn, asset_id, body.tags)
+        return edited(asset_id)
+
+    @app.get("/api/tags")
+    async def list_tags() -> list[dict]:
+        return db.list_tags(app.state.conn)
 
     @app.get("/api/assets/{asset_id}")
     async def get_asset(asset_id: int) -> dict:

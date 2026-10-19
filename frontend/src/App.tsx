@@ -1,7 +1,7 @@
-import { lazy, Suspense, useEffect, useMemo, useState, type FormEvent } from "react";
-import { api, errorText, type App as DccApp, type Bridge, type Library } from "./api";
-import { AssetCard } from "./AssetCard";
-import { useAssets, type AssetFilters } from "./useAssets";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { api, errorText, type App as DccApp, type Bridge, type Library, type TagCount } from "./api";
+import { AssetCard, type EditAsset } from "./AssetCard";
+import { optimisticEdit, useAssets, type AssetFilters } from "./useAssets";
 import { useHoverPreview } from "./useHoverPreview";
 
 const HoverViewport3D = lazy(() => import("./HoverViewport3D"));
@@ -19,6 +19,15 @@ export function App() {
   const [error, setError] = useState<string | null>(null);
   const [bridges, setBridges] = useState<Bridge[]>([]);
   const [bridgeNote, setBridgeNote] = useState<string | null>(null);
+  const [favoritesOnly, setFavoritesOnly] = useState(false);
+  const [tag, setTag] = useState("");
+  const [tags, setTags] = useState<TagCount[]>([]);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const refreshTags = useCallback(() => {
+    api.listTags().then(setTags, (e: unknown) => setError(errorText(e)));
+  }, []);
+  useEffect(refreshTags, [refreshTags]);
 
   useEffect(() => {
     const t = setTimeout(() => setQ(qInput.trim()), SEARCH_DEBOUNCE_MS);
@@ -43,10 +52,28 @@ export function App() {
   };
 
   const filters = useMemo<AssetFilters>(
-    () => ({ library_id: libraryId, q: q || undefined, ext: ext.trim().replace(/^\./, "").toLowerCase() || undefined }),
-    [libraryId, q, ext],
+    () => ({
+      library_id: libraryId,
+      q: q || undefined,
+      ext: ext.trim().replace(/^\./, "").toLowerCase() || undefined,
+      favorite: favoritesOnly || undefined,
+      tag: tag || undefined,
+    }),
+    [libraryId, q, ext, favoritesOnly, tag],
   );
-  const { page, error: assetError, loading } = useAssets(filters);
+  const { page, error: assetError, loading, update } = useAssets(filters);
+  const editAsset = useCallback<EditAsset>(
+    (before, after, send) => {
+      optimisticEdit(before, after, send, update).then(
+        () => {
+          setEditError(null);
+          refreshTags();
+        },
+        (e: unknown) => setEditError(errorText(e)),
+      );
+    },
+    [update, refreshTags],
+  );
   const hover = useHoverPreview();
 
   const knownExts = useMemo(() => [...new Set(["blend", ...apps.flatMap((a) => a.exts)])], [apps]);
@@ -65,7 +92,7 @@ export function App() {
     );
   };
 
-  const shownError = error ?? assetError;
+  const shownError = error ?? editError ?? assetError;
 
   return (
     <div className="min-h-screen">
@@ -111,6 +138,21 @@ export function App() {
           value={qInput}
           onChange={(e) => setQInput(e.target.value)}
         />
+        <button
+          type="button"
+          aria-pressed={favoritesOnly}
+          className={`rounded px-2 py-1 ${favoritesOnly ? "bg-amber-500 text-neutral-950" : "bg-neutral-800 hover:bg-neutral-700"}`}
+          onClick={() => setFavoritesOnly((f) => !f)}
+        >
+          ★ Favourites
+        </button>
+        <select aria-label="Tag" className="rounded bg-neutral-800 px-2 py-1" value={tag} onChange={(e) => setTag(e.target.value)}>
+          <option value="">All tags</option>
+          {tag && !tags.some((t) => t.tag === tag) && <option value={tag}>{tag} (0)</option>}
+          {tags.map((t) => (
+            <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>
+          ))}
+        </select>
         {bridges.filter((b) => !b.installed).map((b) => (
           <button
             key={b.app_id}
@@ -132,7 +174,7 @@ export function App() {
       )}
       <main className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 p-4">
         {page.items.map((a) => (
-          <AssetCard key={a.id} asset={a} apps={apps} onHoverStart={hover.enter} onHoverEnd={hover.leave} />
+          <AssetCard key={a.id} asset={a} apps={apps} onEdit={editAsset} onHoverStart={hover.enter} onHoverEnd={hover.leave} />
         ))}
       </main>
       {hover.active && (

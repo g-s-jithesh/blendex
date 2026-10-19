@@ -127,6 +127,22 @@
             }
           },
           {
+            "name": "favorite",
+            "in": "query",
+            "description": "true: only favourites; false: only non-favourites",
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "tag",
+            "in": "query",
+            "description": "Only assets carrying this tag (trimmed, case-insensitive)",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "schema": {
@@ -266,6 +282,105 @@
           },
           "409": {
             "$ref": "#/components/responses/Unsupported"
+          }
+        }
+      }
+    },
+    "/assets/{id}/favorite": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "put": {
+        "operationId": "setAssetFavorite",
+        "description": "Stars or unstars the asset. Stored on the asset identity, so it survives file edits.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FavoriteUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated asset; also broadcast as asset.updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/assets/{id}/tags": {
+      "parameters": [
+        {
+          "$ref": "#/components/parameters/Id"
+        }
+      ],
+      "put": {
+        "operationId": "setAssetTags",
+        "description": "Replaces the asset's tag set. Tags are trimmed, lowercased and de-duplicated; each must be 1-40 printable characters without commas, at most 20 per asset. Survives file edits.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TagsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated asset; also broadcast as asset.updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Asset"
+                }
+              }
+            }
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
+      }
+    },
+    "/tags": {
+      "get": {
+        "operationId": "listTags",
+        "description": "Every tag in use, sorted by tag.",
+        "responses": {
+          "200": {
+            "description": "Tags with asset counts",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/TagCount"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -630,7 +745,9 @@
           "poly_count",
           "error",
           "has_thumbnail",
-          "has_proxy"
+          "has_proxy",
+          "favorite",
+          "tags"
         ],
         "properties": {
           "id": {
@@ -685,6 +802,16 @@
           "has_proxy": {
             "type": "boolean",
             "description": "True once a Blender job has produced a GLB proxy (blend, obj, fbx)"
+          },
+          "favorite": {
+            "type": "boolean"
+          },
+          "tags": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Sorted, lowercase"
           }
         }
       },
@@ -702,6 +829,49 @@
             }
           },
           "total": {
+            "type": "integer"
+          }
+        }
+      },
+      "FavoriteUpdate": {
+        "type": "object",
+        "required": [
+          "favorite"
+        ],
+        "properties": {
+          "favorite": {
+            "type": "boolean"
+          }
+        }
+      },
+      "TagsUpdate": {
+        "type": "object",
+        "required": [
+          "tags"
+        ],
+        "properties": {
+          "tags": {
+            "type": "array",
+            "maxItems": 20,
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 40
+            }
+          }
+        }
+      },
+      "TagCount": {
+        "type": "object",
+        "required": [
+          "tag",
+          "count"
+        ],
+        "properties": {
+          "tag": {
+            "type": "string"
+          },
+          "count": {
             "type": "integer"
           }
         }
