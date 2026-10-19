@@ -3,7 +3,9 @@ import {
   Mesh, MeshBasicMaterial, MeshStandardMaterial, Object3D, Points, PointsMaterial, Scene, SphereGeometry, Texture,
 } from "three";
 import { afterEach, expect, test, vi } from "vitest";
-import { applyLook, disposeProxy, prepareProxy, type Proxy3D } from "../../frontend/src/HoverViewport3D";
+import { DRACOLoader } from "three/examples/jsm/loaders/DRACOLoader.js";
+import { GLTFLoader, type GLTF } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { applyLook, disposeProxy, loadProxy, prepareProxy, type Proxy3D } from "../../frontend/src/HoverViewport3D";
 
 type Disposable = BufferGeometry | Material | Texture;
 
@@ -61,7 +63,10 @@ function reachable(p: Proxy3D): Set<Disposable> {
   return out;
 }
 
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+});
 
 test("prepareProxy + applyLook + disposeProxy disposes every geometry, material and texture", () => {
   const { root, scene, created } = buildScene();
@@ -113,4 +118,15 @@ test("disposeProxy still frees originals while clay is applied", () => {
   for (const d of [...created, p.clay]) d.addEventListener("dispose", () => fired.add(d));
   disposeProxy(p);
   expect([...created, p.clay].filter((d) => !fired.has(d)).map((d) => `${d.type}#${d.id}`)).toEqual([]);
+});
+
+test("loadProxy shuts down its Draco decoder workers whether parsing succeeds or fails", async () => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(new ArrayBuffer(8))));
+  const dispose = vi.spyOn(DRACOLoader.prototype, "dispose");
+  const parse = vi.spyOn(GLTFLoader.prototype, "parseAsync").mockResolvedValueOnce({ scene: new Scene() } as unknown as GLTF);
+  await loadProxy("/p.glb", new AbortController().signal);
+  expect(dispose).toHaveBeenCalledTimes(1);
+  parse.mockRejectedValueOnce(new Error("bad glb"));
+  await expect(loadProxy("/p.glb", new AbortController().signal)).rejects.toThrow("bad glb");
+  expect(dispose).toHaveBeenCalledTimes(2);
 });
