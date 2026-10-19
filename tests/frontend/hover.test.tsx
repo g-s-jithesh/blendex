@@ -5,7 +5,7 @@ import { HOVER_DELAY_MS, useHoverPreview } from "../../frontend/src/useHoverPrev
 
 const asset = (id: number, has_proxy = true): Asset => ({
   id, library_id: 1, path: `/l/a${id}.blend`, name: `a${id}`, ext: "blend", size: 1, mtime: 1,
-  dcc_version: null, status: "ready", poly_count: 12, error: null, has_thumbnail: false, has_proxy,
+  dcc_version: null, status: "ready", poly_count: 12, error: null, has_thumbnail: false, has_proxy, favorite: false, tags: [],
 });
 
 const card = () => document.body.appendChild(document.createElement("div"));

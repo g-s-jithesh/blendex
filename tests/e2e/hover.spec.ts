@@ -20,7 +20,7 @@ const asset = (id: number) => {
   return {
     id, library_id: 1, path: `C:/lib/${name}.${ext}`, name, ext, size: 1024 * id, mtime: 1_700_000_000 + id * 37,
     dcc_version: ext === "blend" ? "5.2" : null, status: "ready", poly_count: null, error: null,
-    has_thumbnail: true, has_proxy: ext !== "blend",
+    has_thumbnail: true, has_proxy: ext !== "blend", favorite: false, tags: [] as string[],
   };
 };
 const ASSETS = Array.from({ length: N }, (_, i) => asset(i + 1));
@@ -108,7 +108,7 @@ async function setup(page: Page) {
       return;
     }
     if (path === "/api/libraries") return route.fulfill({ json: [{ id: 1, path: "C:/lib", created_at: 1 }] });
-    if (path === "/api/apps" || path === "/api/sessions" || path === "/api/bridges") return route.fulfill({ json: [] });
+    if (["/api/apps", "/api/sessions", "/api/bridges", "/api/tags"].includes(path)) return route.fulfill({ json: [] });
     if (path === "/api/assets") return route.fulfill({ json: { items: ASSETS, total: N } });
     return route.fulfill({ status: 404, json: { error: { code: "NOT_FOUND", message: path } } });
   });

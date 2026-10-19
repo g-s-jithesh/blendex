@@ -4,7 +4,7 @@ import { applyEvent } from "./useAssets";
 
 const asset = (id: number, name: string, ext = "blend"): Asset => ({
   id, library_id: 1, path: `/l/${name}.${ext}`, name, ext, size: 1, mtime: 1, dcc_version: null,
-  status: "pending", poly_count: null, error: null, has_thumbnail: false, has_proxy: false,
+  status: "pending", poly_count: null, error: null, has_thumbnail: false, has_proxy: false, favorite: false, tags: [],
 });
 const ev = (type: EventType, data: Asset): AssetEvent => ({ type, asset_id: data.id, data });
 

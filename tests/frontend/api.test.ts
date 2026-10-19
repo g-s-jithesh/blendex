@@ -3,7 +3,7 @@ import { proxyUrl, thumbnailUrl, type Asset } from "../../frontend/src/api";
 
 const asset = (id: number, mtime: number): Asset => ({
   id, library_id: 1, path: `/l/a${id}.obj`, name: `a${id}`, ext: "obj", size: 1, mtime,
-  dcc_version: null, status: "ready", poly_count: 12, error: null, has_thumbnail: true, has_proxy: true,
+  dcc_version: null, status: "ready", poly_count: 12, error: null, has_thumbnail: true, has_proxy: true, favorite: false, tags: [],
 });
 
 test("thumbnailUrl and proxyUrl carry v=<mtime>", () => {

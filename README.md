@@ -50,6 +50,7 @@ RAM stays at about 250 MB after a preview closes because the web engine keeps it
 ## Using Blendex
 
 - **Search and filter.** Type in **Search by name…**, or enter an extension such as `fbx` in the **ext** box. The library menu at the top switches between libraries.
+- **Favourites and tags.** Click the ☆ on a card (or Tab to it and press Enter) to star it. Type in a card's **+ tag** box and press Enter to tag it; click **×** on a tag to remove it. In the header, **★ Favourites** shows only starred assets and the **All tags** menu shows only assets with that tag. Stars and tags stay when you edit the file, and go away when the file is deleted or moved.
 - **Hover to orbit.** Hover a card with a **3D** badge for 2 seconds. Drag to orbit, scroll to zoom, press **W** or click **Wireframe** for wireframe, and **C** or **Clay** for a plain clay material. The polycount is shown at the top.
 - **Live updates.** Save, add, rename or delete files in a library and the grid updates by itself.
 - **Open in…** Each card's menu can:

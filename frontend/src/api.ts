@@ -4,8 +4,9 @@ export type Asset = {
   id: number; library_id: number; path: string; name: string; ext: string;
   size: number; mtime: number; dcc_version: string | null;
   status: AssetStatus; poly_count: number | null; error: string | null;
-  has_thumbnail: boolean; has_proxy: boolean;
+  has_thumbnail: boolean; has_proxy: boolean; favorite: boolean; tags: string[];
 };
+export type TagCount = { tag: string; count: number };
 export type App = { id: string; name: string; version: string | null; executable: string; exts: string[] };
 export type Session = { id: string; app: string; version: string | null; pid: number; file: string | null; exts: string[] };
 export type Bridge = { app_id: string; name: string; installed: boolean };
@@ -32,7 +33,9 @@ export class ApiError extends Error {
   }
 }
 
-export type AssetQuery = { library_id?: number; q?: string; ext?: string; limit?: number; offset?: number };
+export type AssetQuery = {
+  library_id?: number; q?: string; ext?: string; favorite?: boolean; tag?: string; limit?: number; offset?: number;
+};
 
 export const API_BASE = "/api";
 
@@ -71,6 +74,7 @@ function queryString(params: AssetQuery): string {
 }
 
 const post = (body: unknown): RequestInit => ({ method: "POST", body: JSON.stringify(body) });
+const put = (body: unknown): RequestInit => ({ method: "PUT", body: JSON.stringify(body) });
 
 export const api = {
   health: () => request<Health>("/health"),
@@ -81,6 +85,9 @@ export const api = {
     request<AssetPage>(`/assets${queryString(params)}`, { signal }),
   getAsset: (id: number) => request<Asset>(`/assets/${id}`),
   convertAsset: (id: number) => request<void>(`/assets/${id}/convert`, { method: "POST" }),
+  setFavorite: (id: number, favorite: boolean) => request<Asset>(`/assets/${id}/favorite`, put({ favorite })),
+  setTags: (id: number, tags: string[]) => request<Asset>(`/assets/${id}/tags`, put({ tags })),
+  listTags: () => request<TagCount[]>("/tags"),
   listApps: () => request<App[]>("/apps"),
   launch: (asset_id: number, app_id: string) => request<void>("/launch", post({ asset_id, app_id })),
   listSessions: () => request<Session[]>("/sessions"),
