@@ -408,6 +408,27 @@ def test_cache_serving_rejects_escapes(daemon, lib, tmp_path, monkeypatch):
         drain(app, c)
 
 
+def test_conversion_refuses_to_write_through_a_linked_cache(daemon, lib, tmp_path):
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    if os.name == "nt":
+        import _winapi
+
+        _winapi.CreateJunction(str(outside), str(lib / ".cache"))
+    else:
+        os.symlink(outside, lib / ".cache")
+    write(lib / "m.obj")
+    write(lib / "p.blend", preview_blend())
+    with daemon() as (app, c):
+        add_library(c, lib)
+        drain(app, c)
+        got = by_name(c)
+    for name in ("m.obj", "p.blend"):
+        assert got[name]["status"] == "failed" and "links to another folder" in got[name]["error"], got[name]
+        assert got[name]["has_thumbnail"] is False and got[name]["has_proxy"] is False
+    assert list(outside.iterdir()) == []
+
+
 def test_apps_listing(daemon, blender_install):
     with daemon() as (_app, c):
         r = c.get("/api/apps")
