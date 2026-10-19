@@ -144,6 +144,8 @@ start.bat
 
 runs the development version: backend on port 8765, UI on http://127.0.0.1:5173 with hot reload.
 
+On Linux (or macOS) run `./start.sh` instead. It needs Python 3.11+ with `venv` (Debian/Ubuntu: `sudo apt install python3-venv`) and Node.js 20+; the first run creates `.venv` and installs the packages, and Ctrl+C stops both servers. Blender is found in `/usr/bin`, `/usr/local/bin`, `/snap/bin`, `/opt/blender*/`, `~/blender*/` (unpacked downloads) or on `PATH`. **Show in folder** and **Open in default app** need `xdg-utils`; selecting the file in the folder needs a file manager that implements `org.freedesktop.FileManager1` (Nautilus, Dolphin, Nemo).
+
 To build the installer you also need [Inno Setup 6](https://jrsoftware.org/isinfo.php) (`winget install JRSoftware.InnoSetup`):
 
 ```bat
