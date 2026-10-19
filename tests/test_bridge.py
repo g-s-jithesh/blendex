@@ -1,6 +1,5 @@
 import hashlib
 import json
-import os
 import socket
 import socketserver
 import subprocess
@@ -185,8 +184,9 @@ def test_open_import_script_leaves_only_the_imported_mesh(real_fixtures, name):
 @pytest.mark.blender
 @needs_blender
 def test_install_writes_only_into_the_isolated_profile(tmp_path, monkeypatch):
+    monkeypatch.delenv("BLENDER_USER_RESOURCES", raising=False)
+    real = bridge.addon_path("any").parents[3]
     monkeypatch.setenv("BLENDER_USER_RESOURCES", str(tmp_path / "profile"))
-    real = Path(os.environ.get("APPDATA", Path.home())) / "Blender Foundation" / "Blender"
     before = {p: hashlib.md5(p.read_bytes()).hexdigest() for p in real.glob("*/config/userpref.blend")}
     bridge.install(BLENDER)
     assert bridge.addon_path("any").read_bytes() == (ROOT / "scripts" / "dam_bridge.py").read_bytes()

@@ -101,7 +101,7 @@ def addon_path(version: str) -> Path:
     elif sys.platform == "darwin":
         base = Path.home() / "Library" / "Application Support" / "Blender"
     else:
-        base = Path.home() / ".config" / "blender"
+        base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config") / "blender"
     return base / version / "scripts" / "addons" / "dam_bridge.py"
 
 

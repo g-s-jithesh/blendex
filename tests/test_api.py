@@ -7,6 +7,7 @@ import struct
 import subprocess
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from compression import zstd
@@ -52,6 +53,10 @@ def blender_install(tmp_path, monkeypatch):
     return exes
 
 
+def patch_popen(monkeypatch, fake) -> None:
+    monkeypatch.setattr(dcc, "subprocess", SimpleNamespace(**{**vars(subprocess), "Popen": fake}))
+
+
 @pytest.fixture
 def popen(monkeypatch):
     calls = []
@@ -60,7 +65,7 @@ def popen(monkeypatch):
         calls.append((args, kwargs))
         return object()
 
-    monkeypatch.setattr(dcc.subprocess, "Popen", fake)
+    patch_popen(monkeypatch, fake)
     return calls
 
 
@@ -99,8 +104,8 @@ def test_libraries_crud_and_errors(daemon, lib, tmp_path):
 
         assert_error(c.post("/api/libraries", json={"path": str(lib)}), 409, "ALREADY_EXISTS")
         assert_error(c.post("/api/libraries", json={"path": lib.as_posix()}), 409, "ALREADY_EXISTS")
-        assert_error(c.post("/api/libraries", json={"path": str(lib / "sub" / "..")}), 409, "ALREADY_EXISTS")
         (lib / "sub").mkdir()
+        assert_error(c.post("/api/libraries", json={"path": str(lib / "sub" / "..")}), 409, "ALREADY_EXISTS")
         assert_error(c.post("/api/libraries", json={"path": str(lib / "sub")}), 422, "INVALID_PATH")
         assert_error(c.post("/api/libraries", json={"path": str(tmp_path)}), 422, "INVALID_PATH")
         assert_error(c.post("/api/libraries", json={"path": "relative/dir"}), 422, "INVALID_PATH")
@@ -497,7 +502,7 @@ def test_launch_failure_envelope(daemon, lib, blender_install, monkeypatch):
     def boom(*a, **k):
         raise FileNotFoundError(2, "not found", a[0][0])
 
-    monkeypatch.setattr(dcc.subprocess, "Popen", boom)
+    patch_popen(monkeypatch, boom)
     write(lib / "a.blend", blend("4.2"))
     with daemon() as (app, c):
         add_library(c, lib)
@@ -516,7 +521,7 @@ def test_launch_with_real_popen_uses_argv_list(daemon, lib, blender_install, mon
             seen.append((args, kw))
             super().__init__([sys.executable, "-c", "pass"], *a, **kw)
 
-    monkeypatch.setattr(dcc.subprocess, "Popen", Spy)
+    patch_popen(monkeypatch, Spy)
     write(lib / "a b & c.blend", blend("4.2"))
     with daemon() as (app, c):
         add_library(c, lib)
