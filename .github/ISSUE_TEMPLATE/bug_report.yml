@@ -28,7 +28,7 @@ body:
     attributes:
       label: Blendex version
       description: Settings → Apps shows it, or the release you installed.
-      placeholder: "1.1.0"
+      placeholder: "1.2.0"
     validations:
       required: true
   - type: input
