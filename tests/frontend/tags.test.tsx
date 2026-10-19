@@ -59,12 +59,12 @@ test("tags are added normalized and sorted, and removed by their chip button", (
   const edits = renderCard(asset({ tags: ["metal", "wood"] }));
   const input = screen.getByRole("textbox", { name: "Add tag to crate" });
   fireEvent.change(input, { target: { value: "  Hero " } });
-  fireEvent.submit(input);
+  fireEvent.keyDown(input, { key: "Enter" });
   expect(edits[0][1].tags).toEqual(["hero", "metal", "wood"]);
   expect((input as HTMLInputElement).value).toBe("");
 
   fireEvent.change(input, { target: { value: "METAL" } });
-  fireEvent.submit(input);
+  fireEvent.keyDown(input, { key: "Enter" });
   expect(edits).toHaveLength(1);
 
   fireEvent.click(screen.getByRole("button", { name: "Remove tag metal" }));
