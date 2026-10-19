@@ -22,8 +22,10 @@ assert os.path.isfile(args.input), args.input
 if log := os.environ.get("FAKE_BLENDER_LOG"):
     # One file per launch: concurrent appends to a shared file can drop lines on Windows.
     os.makedirs(log, exist_ok=True)
-    with open(os.path.join(log, f"{time.time_ns()}-{os.getpid()}.txt"), "x", encoding="utf-8") as f:
+    entry = os.path.join(log, f"{time.time_ns()}-{os.getpid()}")
+    with open(f"{entry}.tmp", "x", encoding="utf-8") as f:
         f.write(f"{args.input}\t{'full' if args.out_glb else 'thumb'}")
+    os.replace(f"{entry}.tmp", f"{entry}.txt")
 time.sleep(float(os.environ.get("FAKE_BLENDER_SLEEP", "0")))
 
 

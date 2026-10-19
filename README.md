@@ -53,6 +53,7 @@ RAM stays at about 250 MB after a preview closes because the web engine keeps it
 - **Favourites and tags.** Click the ☆ on a card (or Tab to it and press Enter) to star it. Type in a card's **+ tag** box and press Enter to tag it; click **×** on a tag to remove it. In the header, **★ Favourites** shows only starred assets and the **All tags** menu shows only assets with that tag. Stars and tags stay when you edit the file, and go away when the file is deleted or moved.
 - **Hover to orbit.** Hover a card with a **3D** badge for 2 seconds. Drag to orbit, scroll to zoom, press **W** or click **Wireframe** for wireframe, and **C** or **Clay** for a plain clay material. The polycount is shown at the top.
 - **Live updates.** Save, add, rename or delete files in a library and the grid updates by itself.
+- **Conversion progress.** While Blender builds thumbnails and previews, the header shows e.g. **Converting 2 · 340 queued**. **Pause** lets the running jobs finish and starts no new ones until you click **Resume**; restarting Blendex resumes automatically.
 - **Open in…** Each card's menu can:
   - open the file in Blender (`.blend` opens directly; other formats are imported into a new scene),
   - show the file in Explorer,

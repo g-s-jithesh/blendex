@@ -158,7 +158,7 @@ def by_name(c, **params) -> dict[str, dict]:
     return {a["name"] + "." + a["ext"]: a for a in items(c, **params)}
 
 
-def ws_until(ws, pred, timeout: float = 20) -> list[dict]:
+def ws_until(ws, pred, timeout: float = 20, queue: bool = False) -> list[dict]:
     end, seen = time.monotonic() + timeout, []
 
     async def recv():
@@ -167,7 +167,9 @@ def ws_until(ws, pred, timeout: float = 20) -> list[dict]:
             return await ws._send_rx.receive()
 
     while not pred(seen):
-        seen.append(json.loads(ws.portal.call(recv)["text"]))
+        msg = json.loads(ws.portal.call(recv)["text"])
+        if queue or msg["type"] != "queue.updated":
+            seen.append(msg)
     return seen
 
 
@@ -206,7 +208,7 @@ def spawns(log: Path) -> int:
 
 
 def spawned(log: Path) -> list[tuple[str, str]]:
-    entries = [f.read_text(encoding="utf-8") for f in sorted(log.iterdir())] if log.exists() else []
+    entries = [f.read_text(encoding="utf-8") for f in sorted(log.glob("*.txt"))] if log.exists() else []
     return [(Path(p).name, mode) for p, mode in (entry.split("\t") for entry in entries)]
 
 

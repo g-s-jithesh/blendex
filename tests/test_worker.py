@@ -129,3 +129,53 @@ def test_shutdown_while_processes_are_starting(daemon, lib, monkeypatch, spawn_l
         assert not app.state.worker.procs
         assert no_fake_procs(timeout=15)
         assert temp_files(lib) == []
+
+
+def queue(c) -> dict:
+    return c.get("/api/queue").json()
+
+
+def test_pause_starts_no_jobs_and_resume_continues(daemon, lib, monkeypatch, spawn_log):
+    monkeypatch.setenv("FAKE_BLENDER_SLEEP", "3")
+    fill(lib, 6)
+    with daemon() as (app, c):
+        assert queue(c) == {"queued": 0, "running": 0, "paused": False}
+        assert c.post("/api/queue/pause").json() == {"queued": 0, "running": 0, "paused": True}
+        add_library(c, lib)
+        wait_until(lambda: queue(c)["queued"] == 6)
+        time.sleep(1.5)
+        assert spawns(spawn_log) == 0 and not app.state.worker.procs
+        assert {a["status"] for a in items(c)} == {"pending"}
+
+        assert c.post("/api/queue/resume").json()["paused"] is False
+        wait_until(lambda: spawns(spawn_log) == 2 and app.state.worker.running == 2)
+        assert c.post("/api/queue/pause").json() == {"queued": 4, "running": 2, "paused": True}
+        drain(app, c)
+        assert queue(c) == {"queued": 4, "running": 0, "paused": True}
+        assert spawns(spawn_log) == 2
+        assert sorted(a["status"] for a in items(c)) == ["pending"] * 4 + ["ready"] * 2
+
+        monkeypatch.setenv("FAKE_BLENDER_SLEEP", "0")
+        c.post("/api/queue/resume")
+        drain(app, c)
+        assert queue(c) == {"queued": 0, "running": 0, "paused": False}
+        assert spawns(spawn_log) == 6 and {a["status"] for a in items(c)} == {"ready"}
+    assert no_fake_procs()
+
+
+def test_shutdown_while_paused_leaves_no_processes_and_restart_resumes(daemon, lib, monkeypatch, spawn_log):
+    monkeypatch.setenv("FAKE_BLENDER_SLEEP", "120")
+    fill(lib, 6)
+    with daemon() as (app, c):
+        add_library(c, lib)
+        wait_until(lambda: spawns(spawn_log) == 2 and len(app.state.worker.procs) == 2)
+        c.post("/api/queue/pause")
+    assert no_fake_procs() and not app.state.worker.procs
+    assert spawns(spawn_log) == 2 and temp_files(lib) == []
+
+    monkeypatch.setenv("FAKE_BLENDER_SLEEP", "0")
+    with daemon() as (app, c):
+        assert queue(c)["paused"] is False
+        drain(app, c)
+        assert {a["status"] for a in items(c)} == {"ready"}
+    assert spawns(spawn_log) == 8

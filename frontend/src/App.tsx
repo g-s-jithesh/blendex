@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import { api, errorText, type App as DccApp, type Bridge, type Library, type TagCount } from "./api";
 import { AssetCard, type EditAsset } from "./AssetCard";
+import { QueueIndicator } from "./QueueIndicator";
 import { optimisticEdit, useAssets, type AssetFilters } from "./useAssets";
 import { useHoverPreview } from "./useHoverPreview";
 
@@ -165,6 +166,7 @@ export function App() {
           </button>
         ))}
         {bridgeNote && <span role="status" className="text-neutral-300">{bridgeNote}</span>}
+        <QueueIndicator />
         <span className="ml-auto text-neutral-400">
           {loading ? "Loading…" : `${page.items.length} of ${page.total} assets`}
         </span>

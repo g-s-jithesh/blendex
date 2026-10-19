@@ -171,6 +171,7 @@ def test_watcher_add_modify_rename_delete(daemon, lib):
         assert a["dcc_version"] == "4.3"
         write(f, blend("4.4", b"grown"), int(time.time()) + 5)
         wait_until(lambda: c.get(f"/api/assets/{a['id']}").json()["dcc_version"] == "4.4")
+        drain(app, c)
         f.rename(lib / "sub" / "renamed.blend")
         wait_until(lambda: set(by_name(c)) == {"renamed.blend"})
         (lib / "sub" / "renamed.blend").unlink()

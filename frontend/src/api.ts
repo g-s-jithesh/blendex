@@ -17,6 +17,9 @@ export type EventType =
   | "asset.added" | "asset.updated" | "asset.removed"
   | "conversion.started" | "conversion.done" | "conversion.failed";
 export type AssetEvent = { type: EventType; asset_id: number; data: Asset };
+export type QueueState = { queued: number; running: number; paused: boolean };
+export type QueueEvent = { type: "queue.updated"; data: QueueState };
+export type ServerEvent = AssetEvent | QueueEvent;
 
 export type ErrorCode =
   | "VALIDATION_ERROR" | "INVALID_PATH" | "NOT_FOUND" | "ALREADY_EXISTS"
@@ -88,6 +91,9 @@ export const api = {
   setFavorite: (id: number, favorite: boolean) => request<Asset>(`/assets/${id}/favorite`, put({ favorite })),
   setTags: (id: number, tags: string[]) => request<Asset>(`/assets/${id}/tags`, put({ tags })),
   listTags: () => request<TagCount[]>("/tags"),
+  getQueue: () => request<QueueState>("/queue"),
+  pauseQueue: () => request<QueueState>("/queue/pause", { method: "POST" }),
+  resumeQueue: () => request<QueueState>("/queue/resume", { method: "POST" }),
   listApps: () => request<App[]>("/apps"),
   launch: (asset_id: number, app_id: string) => request<void>("/launch", post({ asset_id, app_id })),
   listSessions: () => request<Session[]>("/sessions"),
