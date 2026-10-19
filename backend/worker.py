@@ -44,6 +44,8 @@ async def kill_tree(proc: asyncio.subprocess.Process) -> None:
 def cache_dir(library_path: str) -> Path:
     cache = Path(library_path) / ".cache"
     cache.mkdir(exist_ok=True)
+    if cache.resolve() != Path(library_path).resolve() / ".cache":
+        raise PermissionError(f"{cache} links to another folder; Blendex will not write previews through it")
     hide(cache)
     return cache
 

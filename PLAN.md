@@ -129,7 +129,6 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 
 - [for:backend-coder→frontend-coder] `POST /convert` without a file save keeps the same `v=<mtime>`, so browsers may show the stale obj/fbx thumbnail/proxy until next save. Fix only if it matters (e.g. expose a version id)
 
-- [for:architect→backend-coder] If a library's `.cache` is a junction/symlink, the worker writes through it (`cache_dir()` + `os.replace`) and could overwrite a file outside the library. Serving already refuses this. Decide: refuse writes when `.cache` resolves outside the library (low severity: requires write access to the library)
 
 - [for:backend-coder] Maya / 3ds Max / Houdini / C4D import bridges (Maya: commandPort). Not installed here, so untestable
 

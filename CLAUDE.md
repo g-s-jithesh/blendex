@@ -145,6 +145,7 @@ Contract changes go through the architect: update this section and `PLAN.md` →
 - Bridge sessions bind `127.0.0.1` only, require the per-session token, accept only `info`/`import` of known 3D exts, and session ids must match `blender-<digits>` before any file lookup.
 - Header parsers read a bounded byte count and never trust lengths from the file.
 - File-serving endpoints only serve files resolved inside a registered library's `.cache/`.
+- The worker refuses to write previews when a library's `.cache` resolves outside the library (a symlink or junction): the asset fails with a clear error instead.
 
 ## Agents & Ownership
 
