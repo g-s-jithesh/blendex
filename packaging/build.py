@@ -8,6 +8,9 @@ ROOT = Path(__file__).resolve().parent.parent
 OUT = ROOT / "release"
 ISCC_PATHS = [Path(os.environ.get("LOCALAPPDATA", ""), "Programs", "Inno Setup 6", "ISCC.exe"),
               Path(os.environ.get("ProgramFiles(x86)", ""), "Inno Setup 6", "ISCC.exe")]
+# setuptools only comes in through cffi's compiler shim; clr_loader uses cffi without compiling.
+UNUSED = ["pytest", "setuptools", "pkg_resources", "_distutils_hack", "pydoc", "pydoc_data", "_pyrepl",
+          "httptools", "watchfiles", "dotenv", "yaml"]
 sys.path.insert(0, str(ROOT))
 
 from backend.app import VERSION
@@ -39,7 +42,7 @@ def main() -> None:
         "--distpath", OUT / "dist", "--workpath", OUT / "build", "--specpath", OUT, "--paths", ROOT,
         "--collect-submodules", "uvicorn", "--collect-submodules", "websockets",
         *[arg for src, dest in data for arg in ("--add-data", f"{src}{os.pathsep}{dest}")],
-        "--exclude-module", "pytest", ROOT / "packaging" / "blendex.py")
+        *[arg for mod in UNUSED for arg in ("--exclude-module", mod)], ROOT / "packaging" / "blendex.py")
     for cache in (OUT / "dist" / "Blendex").rglob("__pycache__"):
         shutil.rmtree(cache)
     run(compiler, "/Q", f"/DAppVersion={VERSION}", ROOT / "packaging" / "blendex.iss")
