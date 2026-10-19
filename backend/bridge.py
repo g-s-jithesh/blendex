@@ -1,16 +1,21 @@
+import ctypes
 import json
 import os
 import re
 import socket
 import subprocess
 import sys
+import uuid
 from pathlib import Path
 
 from .dcc import BLENDER_IMPORTS
 
 SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
 IMPORT_EXTS = ["blend", *BLENDER_IMPORTS]
-SESSION_ID = re.compile(r"blender-\d+")
+MAYA_IMPORT_EXTS = ["ma", "mb", "obj", "fbx", "dae", "usd", "usda", "usdc", "usdz", "abc", "stl"]
+SESSION_APPS = {"blender": ("Blender", IMPORT_EXTS), "maya": ("Maya", MAYA_IMPORT_EXTS)}
+SESSION_ID = re.compile(r"(blender|maya)-\d+")
+FOLDERID_DOCUMENTS = uuid.UUID("FDD39AD0-238F-46AF-ADB4-6C85480369C7")
 CONNECT_TIMEOUT = 3.0
 INFO_TIMEOUT = 2.0
 IMPORT_TIMEOUT = 75.0
@@ -46,10 +51,17 @@ def _ask(session: dict, payload: dict, timeout: float) -> dict:
     return reply if isinstance(reply, dict) else {}
 
 
+def session_app(session_id: str) -> tuple[str, list[str]] | None:
+    m = SESSION_ID.fullmatch(session_id)
+    return SESSION_APPS[m[1]] if m else None
+
+
 def list_sessions() -> list[dict]:
     found = []
-    for path in sorted(sessions_dir().glob("blender-*.json")):
-        session = _read(path)
+    paths = [p for prefix in SESSION_APPS for p in sessions_dir().glob(f"{prefix}-*.json")]
+    for path in sorted(paths):
+        app = session_app(path.stem)
+        session = _read(path) if app else None
         try:
             if session is None:
                 raise ConnectionRefusedError
@@ -60,21 +72,22 @@ def list_sessions() -> list[dict]:
         except OSError:
             continue
         if info.get("ok"):
-            found.append({"id": path.stem, "app": "Blender", "version": info.get("version"),
-                          "pid": info.get("pid"), "file": info.get("file"), "exts": IMPORT_EXTS})
+            found.append({"id": path.stem, "app": app[0], "version": info.get("version"),
+                          "pid": info.get("pid"), "file": info.get("file"), "exts": app[1]})
         else:
             path.unlink(missing_ok=True)
     return found
 
 
 def import_into(session_id: str, path: str) -> list[str]:
-    session = _read(sessions_dir() / f"{session_id}.json") if SESSION_ID.fullmatch(session_id) else None
-    if session is None:
+    app = session_app(session_id)
+    session = _read(sessions_dir() / f"{session_id}.json") if app else None
+    if app is None or session is None:
         raise LookupError(session_id)
     try:
         reply = _ask(session, {"cmd": "import", "path": str(Path(path))}, IMPORT_TIMEOUT)
     except (OSError, ValueError) as e:
-        raise BridgeError(f"Blender session did not answer: {e}") from e
+        raise BridgeError(f"{app[0]} session did not answer: {e}") from e
     if not reply.get("ok"):
         raise BridgeError(str(reply.get("error") or "import failed"))
     return [str(n) for n in reply.get("imported", [])]
@@ -92,9 +105,47 @@ def addon_path(version: str) -> Path:
     return base / version / "scripts" / "addons" / "dam_bridge.py"
 
 
+def _documents() -> Path:
+    if sys.platform != "win32":
+        return Path.home() / "Documents"
+    # Documents may be redirected (OneDrive), so %USERPROFILE%\Documents is not where Maya looks.
+    out = ctypes.c_wchar_p()
+    ctypes.oledll.shell32.SHGetKnownFolderPath(ctypes.create_string_buffer(FOLDERID_DOCUMENTS.bytes_le), 0, None,
+                                               ctypes.byref(out))
+    try:
+        return Path(out.value or "")
+    finally:
+        ctypes.windll.ole32.CoTaskMemFree(out)
+
+
+def maya_plugin_path(version: str) -> Path:
+    if env := os.environ.get("MAYA_APP_DIR"):
+        base = Path(env)
+    elif sys.platform == "win32":
+        base = _documents() / "maya"
+    elif sys.platform == "darwin":
+        base = Path.home() / "Library" / "Preferences" / "Autodesk" / "maya"
+    else:
+        base = Path.home() / "maya"
+    return base / version / "plug-ins" / "maya_bridge.py"
+
+
+def mayapy(executable: str) -> Path:
+    exe = Path(executable)
+    if sys.platform == "win32":
+        return exe.with_name("mayapy.exe")
+    return exe.parent.parent / "bin" / "mayapy" if sys.platform == "darwin" else exe.with_name("mayapy")
+
+
 def install(executable: str) -> None:
-    result = subprocess.run([executable, "-b", "--python-exit-code", "1", "-P", str(SCRIPTS / "install_dam_bridge.py")],
-                            stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=120, check=False)
+    if "maya" in Path(executable).name.lower():
+        name, timeout, env = "Maya", 180, os.environ | {"MAYA_SKIP_USERSETUP_PY": "1"}
+        argv = [str(mayapy(executable)), str(SCRIPTS / "install_maya_bridge.py")]
+    else:
+        name, timeout, env = "Blender", 120, None
+        argv = [executable, "-b", "--python-exit-code", "1", "-P", str(SCRIPTS / "install_dam_bridge.py")]
+    result = subprocess.run(argv, stdin=subprocess.DEVNULL, capture_output=True, text=True, timeout=timeout,
+                            env=env, check=False)
     if result.returncode != 0:
         lines = [ln for ln in (result.stderr + result.stdout).splitlines() if "Error" in ln]
-        raise BridgeError(lines[-1] if lines else f"Blender exited with code {result.returncode}")
+        raise BridgeError(lines[-1] if lines else f"{name} exited with code {result.returncode}")

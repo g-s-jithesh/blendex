@@ -495,7 +495,7 @@
     "/sessions": {
       "get": {
         "operationId": "listSessions",
-        "description": "Live Blender sessions with the bridge add-on. Session files whose Blender is gone are deleted.",
+        "description": "Live Blender and Maya sessions with the bridge add-on/plug-in. Session files whose app is gone are deleted.",
         "responses": {
           "200": {
             "description": "Sessions",
@@ -516,7 +516,7 @@
     "/sessions/{id}/import": {
       "post": {
         "operationId": "importIntoSession",
-        "description": "Imports the asset into the running Blender session (obj/fbx/glb/gltf/stl/ply/usd*/abc import, .blend appends its objects) as one undo step.",
+        "description": "Imports the asset into the running session. Blender: obj/fbx/glb/gltf/stl/ply/usd*/abc import, .blend appends its objects, as one undo step. Maya: ma/mb/obj/fbx/dae/usd*/abc/stl import (not undoable). An ext outside the session's exts is 409 UNSUPPORTED.",
         "parameters": [
           {
             "name": "id",
@@ -566,7 +566,7 @@
     "/bridges": {
       "get": {
         "operationId": "listBridges",
-        "description": "Detected Blender installs and whether the bridge add-on is installed in each.",
+        "description": "Detected Blender and Maya installs and whether the bridge add-on/plug-in is installed in each.",
         "responses": {
           "200": {
             "description": "Bridges",
@@ -587,7 +587,7 @@
     "/bridges/{id}": {
       "post": {
         "operationId": "installBridge",
-        "description": "Copies the bridge add-on into that Blender's user add-ons, enables it and saves its preferences. Running sessions pick it up after a restart.",
+        "description": "Blender: copies the bridge add-on into its user add-ons, enables it and saves its preferences. Maya: runs mayapy with scripts/install_maya_bridge.py, which copies the plug-in into <MAYA_APP_DIR or Documents/maya>/<version>/plug-ins and marks it autoload; fails with BRIDGE_FAILED until that Maya has been started once. Running sessions pick it up after a restart.",
         "parameters": [
           {
             "name": "id",
@@ -1017,14 +1017,18 @@
           "file",
           "exts"
         ],
-        "description": "A running Blender with the Blendex bridge add-on enabled",
+        "description": "A running Blender or Maya with the Blendex bridge loaded",
         "properties": {
           "id": {
             "type": "string",
-            "description": "e.g. blender-1234"
+            "description": "blender-<pid> or maya-<pid>"
           },
           "app": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "Blender",
+              "Maya"
+            ]
           },
           "version": {
             "type": [
@@ -1040,7 +1044,7 @@
               "string",
               "null"
             ],
-            "description": "Open .blend path, null when unsaved"
+            "description": "Open scene path (.blend / .ma / .mb), null when unsaved"
           },
           "exts": {
             "type": "array",

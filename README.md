@@ -62,6 +62,7 @@ Each preview decodes its model in a Draco decoder worker that is shut down as so
   - or open Windows' **Open with** picker, to use any other installed program.
 - **Update notice (opt-in).** Tick **Check for updates** in the header to see a banner when a newer Blendex is released. The **Get it from GitHub** link opens the release page in your web browser. Offline or failed checks stay silent.
 - **Import into the Blender you already have open.** Click **Install Blender X.Y bridge** in the header once, with Blender closed. From then on, every Blender you open is listed in the card menus as **Import into Blender X.Y — yourfile.blend**. The asset is added to that scene as one undoable step (Ctrl+Z removes it). `.blend` files append their objects.
+- **Import into the Maya you already have open.** Start Maya once after installing it, close it, then click **Install Maya 2027 bridge** (or your version) in the header. Every Maya you open afterwards is listed as **Import into Maya 2027 — yourscene.mb**. Maya can import `.ma`, `.mb`, `.obj`, `.fbx`, `.usd*`, `.abc` and `.stl`. Maya's own import cannot be undone and clears Maya's undo history, so save first.
 
 ### What each file type gets
 
@@ -84,13 +85,14 @@ Every indexed file can also be shown in Explorer or opened with any app through 
 | Thumbnails and 3D proxies | a hidden `.cache` folder inside each library | Yes, rebuilt automatically |
 | Window cache | `%LOCALAPPDATA%\Blendex` | Yes, removed on uninstall |
 | Blender bridge add-on | Blender's user add-ons folder (`dam_bridge.py`) | Disable or remove it in Blender's **Preferences → Add-ons** |
+| Maya bridge plug-in | `Documents\maya\<version>\plug-ins\maya_bridge.py` | Untick **Loaded**/**Auto load** in Maya's **Windows → Settings/Preferences → Plug-in Manager**, or delete the file |
 
 Blendex never modifies or deletes your original files.
 
 ## Privacy and security
 
 - Blendex only listens on `127.0.0.1` (port 8765), so other computers on your network cannot reach it.
-- The Blender bridge also listens only on `127.0.0.1`, requires a random per-session token, and accepts only "import this 3D file" requests. It cannot run code sent to it.
+- The Blender and Maya bridges also listen only on `127.0.0.1`, requires a random per-session token, and accepts only "import this 3D file" requests. It cannot run code sent to it.
 - Blender opens your `.blend` files with embedded scripts disabled while making thumbnails.
 - No telemetry and no network access, apart from Blender and WebView2 themselves, unless you turn on **Check for updates**. That switch is off by default. When it is on, Blendex asks GitHub's public API for the latest release once each time it starts. The request sends nothing about you or your files beyond what any web request carries (your IP address).
 
@@ -103,6 +105,7 @@ Blendex never modifies or deletes your original files.
 | "Port 8765 is used by another program" | Close the program using that port, or a second copy of the development version (`start.bat`), or start Blendex on another port with `DAM_PORT`. |
 | Cards stay on **Pending**, or show **Conversion failed** with "Blender not found" when you hover them | Install Blender 4.2+ in the default folder, or point Blendex at it with `DAM_BLENDER` (see below). |
 | An open Blender is not listed under **Import into…** | Install the bridge from the header (with Blender closed), then restart Blender. A Blender that is busy rendering is not listed until it is idle. |
+| **Install Maya bridge** fails with "start Maya once" | Open that Maya once so it creates its preferences, close it, then install again. Install with Maya closed: a Maya that is open while you install drops the autoload entry when it quits. |
 | Blender prints `Add-on not loaded: "dam_bridge"` at startup | Click **Install Blender X.Y bridge** again in Blendex to reinstall the add-on. |
 | Anything else | See `%APPDATA%\dam\blendex.log` and [open an issue](https://github.com/g-s-jithesh/blendex/issues). |
 
