@@ -72,7 +72,7 @@ Each preview decodes its model in a Draco decoder worker that is shut down as so
 | `.glb`, `.gltf`, `.stl`, `.ply`, `.usd`, `.usda`, `.usdc`, `.usdz`, `.abc` | — | — | ✔ imported into a new scene | ✔ |
 | `.ma`, `.mb` | — | — | — | — |
 
-Every indexed file can also be shown in Explorer or opened with any app through Windows' **Open with** picker. `.ma`/`.mb` files also get **Open in Maya** if Maya is installed in its default folder (untested).
+Every indexed file can also be shown in Explorer or opened with any app through Windows' **Open with** picker. `.ma`/`.mb` files also get **Open in Maya** if Maya is installed in its default folder (tested with Maya 2027).
 
 ## Where Blendex keeps things
 
@@ -123,7 +123,7 @@ Optional environment variables (set them before starting Blendex):
 
 - Windows only for the installer. The development version may run elsewhere, but only Windows is tested.
 - A library cannot be removed, and a failed conversion cannot be retried, from the window yet. Both exist in the API: `DELETE /api/libraries/{id}` and `POST /api/assets/{id}/convert`.
-- Importing into an already open app works for Blender only. Maya opening `.ma`/`.mb` is untested, and 3ds Max, Houdini and Cinema 4D are not supported yet.
+- Importing into an already open app works for Blender only. 3ds Max, Houdini and Cinema 4D are not supported yet.
 - Thumbnails and 3D previews are generated for `.blend`, `.obj` and `.fbx` only.
 - The installer is not code-signed.
 

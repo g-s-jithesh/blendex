@@ -9,10 +9,12 @@ from watchdog.observers import Observer
 
 from . import db
 from .blend_header import parse_blend_header
+from .maya_header import parse_maya_header
 
 EXTS = {"blend", "ma", "mb", "fbx", "obj", "glb", "gltf", "usd", "usda", "usdc", "usdz", "abc", "stl", "ply"}
 PROXY_EXTS = {"blend", "obj", "fbx"}
 CONVERTIBLE = PROXY_EXTS
+VERSIONED = {"blend", "ma", "mb"}
 DEBOUNCE = 0.5
 
 
@@ -26,6 +28,8 @@ def _ext(path: str) -> str:
 
 def _header_version(path: str) -> str | None:
     try:
+        if _ext(path) != "blend":
+            return parse_maya_header(path)
         info = parse_blend_header(path)
     except OSError:
         return None
@@ -46,7 +50,7 @@ def walk(root: str, start: str, known: dict[str, tuple[int, int]]) -> dict[str, 
         except OSError:
             continue
         key, sm = Path(p).as_posix(), (st.st_size, int(st.st_mtime))
-        ver = _header_version(p) if _ext(p) == "blend" and known.get(key) != sm else None
+        ver = _header_version(p) if _ext(p) in VERSIONED and known.get(key) != sm else None
         out[key] = (*sm, ver)
     return out
 

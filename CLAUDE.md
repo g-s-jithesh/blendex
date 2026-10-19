@@ -10,7 +10,7 @@ Local-first asset manager for 3D project folders. A React UI talks to a local Py
 | 3D preview | three.js via `@react-three/fiber` + `@react-three/drei` |
 | Backend | Python 3.11+, FastAPI, uvicorn, `watchdog` |
 | Database | SQLite via stdlib `sqlite3` (no ORM) |
-| Conversion | Blender headless (`blender -b --factory-startup --python-exit-code 1 -P scripts/blender_export_proxy.py -- --input <file> <args>`) builds the thumbnail + GLB proxy for blend/obj/fbx; `.blend` files also show their embedded thumbnail instantly while that job runs. Min Blender 4.2; dev machine has only 5.2.2 LTS. Maya launch-only for now (not installed on dev machine) |
+| Conversion | Blender headless (`blender -b --factory-startup --python-exit-code 1 -P scripts/blender_export_proxy.py -- --input <file> <args>`) builds the thumbnail + GLB proxy for blend/obj/fbx; `.blend` files also show their embedded thumbnail instantly while that job runs. Min Blender 4.2; dev machine has 5.2.2 LTS and Maya 2027 (Education) |
 | Tests | `pytest` (backend, parsers, scripts), `vitest` (frontend logic) |
 | Desktop shell | Dev: Vite dev server proxies `/api` and `/ws` to the daemon (`start.bat`). Release: PyInstaller `Blendex.exe` (`packaging/blendex.py`) runs the daemon, which serves the built UI, inside its own WebView2 window via `pywebview`; Inno Setup installer (`packaging/blendex.iss`). Build with `packaging/build.py` |
 
@@ -43,6 +43,7 @@ PLAN.md            Single source of truth for phases, tasks, decisions, status
 - All JSON uses `snake_case`. Timestamps are integer Unix epoch seconds. IDs are integers.
 - Errors: HTTP status + `{"error": {"code": "<SNAKE_CODE>", "message": "<human text>"}}`. Codes: `VALIDATION_ERROR` 422 (FastAPI's default 422 body is overridden), `INVALID_PATH` 422, `NOT_FOUND` 404, `ALREADY_EXISTS` 409, `UNSUPPORTED` 409 (ext not convertible / not opened by that app), `LAUNCH_FAILED` 500, `BRIDGE_FAILED` 502 (a Blender session or bridge install failed), `INTERNAL` 500.
 - `ext` is lowercase without the dot (`blend`). `GET /assets` orders by `name, id`; `q` is a case-insensitive substring match on `name`; `favorite=true|false` and `tag=<tag>` (exact, case-insensitive) filter.
+- `dcc_version` comes from the file header for `blend` (`docs/blend_header_spec.md`) and `ma`/`mb` (`backend/maya_header.py`: `requires maya` line / IFF `HEAD`→`VERS` chunk, leading number only, e.g. `2027`); `null` for other exts or unreadable headers.
 - Tags are trimmed, lowercased and de-duplicated; each is 1–40 printable characters without commas, at most 20 per asset; violations are `VALIDATION_ERROR`.
 
 ### REST
@@ -119,7 +120,7 @@ type QueueState = { queued: number; running: number; paused: boolean };
 
 ### Open with / import
 
-- `/apps` lists detected Blender (`blend` opens directly; obj/fbx/glb/gltf/stl/ply/usd*/abc start a new Blender that runs `scripts/blender_open_import.py`), Maya (`ma`/`mb`, untested: not installed on the dev machine), and on Windows `explorer` (show in folder) and `open-with` (Windows app picker) for every indexed ext.
+- `/apps` lists detected Blender (`blend` opens directly; obj/fbx/glb/gltf/stl/ply/usd*/abc start a new Blender that runs `scripts/blender_open_import.py`), Maya (`ma`/`mb`, opened directly; verified on 2027), and on Windows `explorer` (show in folder) and `open-with` (Windows app picker) for every indexed ext.
 - Importing into an already-open Blender needs the `scripts/dam_bridge.py` add-on, installed via `POST /bridges/{app_id}` (runs `scripts/install_dam_bridge.py` in that Blender, saves its user prefs). Each GUI session listens on `127.0.0.1:<random port>` and writes `<APPDATA>/dam/sessions/blender-<pid>.json` (`DAM_SESSIONS` overrides) with the port and a random token.
 - Bridge protocol: one JSON line per connection `{"token", "cmd": "info"|"import", "path"?}`, one JSON line back. Commands run on Blender's main thread via a timer; there is no command that executes code. `.blend` imports append its objects; every import is one undo step.
 - Tests that run a real Blender installer must set `BLENDER_USER_RESOURCES` to a temp dir; Blender 5.2 ignores `BLENDER_USER_CONFIG` and would rewrite the user's real preferences.
