@@ -18,7 +18,18 @@ Everything runs on your own PC. Nothing is uploaded anywhere, and Blendex stays 
 
 Windows SmartScreen may warn the first time because the installer is not code-signed: choose **More info → Run anyway**.
 
-### Requirements
+### Linux (x86_64, preview)
+
+Needs a desktop session (X11 or Wayland) on glibc 2.35+ (Ubuntu 22.04+, Debian 12+, Fedora 36+) with OpenGL/EGL drivers, which every desktop install already has (Debian/Ubuntu: `libegl1 libgl1`). Everything else, Qt WebEngine included, is in the download.
+
+```sh
+tar xzf Blendex-<version>-linux-x86_64.tar.gz
+Blendex/install.sh
+```
+
+This installs to `~/.local/opt/blendex` and adds Blendex to your app menu; no root needed. Run it again from a newer download to update. `~/.local/opt/blendex/install.sh --uninstall` removes it and keeps your library index in `~/.local/share/dam` (delete that folder to forget your libraries). Other files: log `~/.local/share/dam/blendex.log`, window data `~/.local/share/Blendex`, cache `~/.cache/Blendex`. The Linux build has only been tested in WSL so far, so please [report](https://github.com/g-s-jithesh/blendex/issues) how it runs on your machine.
+
+### Requirements (Windows)
 
 - Windows 10 or 11 (64-bit).
 - Microsoft Edge WebView2 Runtime, used to draw the window. It is built into Windows 11 and up-to-date Windows 10; if it is missing, Blendex says so and links to the download.
@@ -110,6 +121,10 @@ Blendex never modifies or deletes your original files.
 | `.ma`/`.mb` cards fail with "Maya not found" | Install Maya in its default folder, or point Blendex at its `mayapy` with `DAM_MAYAPY`. The first Maya thumbnail after a start can take 30 s or more. |
 | A `.ma` card fails with "scene contains commands Blendex will not run" | The file holds MEL that Maya's own writer never produces (often an embedded script or virus). Open it in Maya only if you trust where it came from. |
 | Blender prints `Add-on not loaded: "dam_bridge"` at startup | Click **Install Blender X.Y bridge** again in Blendex to reinstall the add-on. |
+| Linux: no 3D preview on hover | Chromium turns WebGL off for blocklisted GPUs/drivers and for software rendering (VMs, WSL). Start Blendex with `QTWEBENGINE_CHROMIUM_FLAGS=--ignore-gpu-blocklist ~/.local/opt/blendex/Blendex` (under WSLg also `QT_QPA_PLATFORM=xcb`). |
+| Linux: nothing appears, or "Could not load the Qt platform plugin" | Run `~/.local/opt/blendex/Blendex` from a terminal to see the error; on Wayland try `QT_QPA_PLATFORM=xcb`. "Qt WebEngine could not start" means the OpenGL libraries are missing (`sudo apt install libegl1 libgl1 libxcb-dri3-0`). |
+| Linux: "Blendex is already running" | Linux doesn't let an app bring another app's window to the front; switch to the open Blendex window. Without `zenity` or `kdialog` the message only goes to the log. |
+| Linux: big libraries stop updating live | The file watcher uses one inotify watch per folder. Raise the limit: `echo fs.inotify.max_user_watches=524288 \| sudo tee /etc/sysctl.d/90-blendex.conf && sudo sysctl --system`. |
 | Anything else | See `%APPDATA%\dam\blendex.log` and [open an issue](https://github.com/g-s-jithesh/blendex/issues). |
 
 ## Configuration

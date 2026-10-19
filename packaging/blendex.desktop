@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Blendex
+Comment=Browse and preview 3D asset libraries
+Exec="@APP@/Blendex"
+Icon=@APP@/blendex.png
+Terminal=false
+Categories=Graphics;3DGraphics;
+StartupWMClass=Blendex

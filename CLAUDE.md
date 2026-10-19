@@ -12,7 +12,7 @@ Local-first asset manager for 3D project folders. A React UI talks to a local Py
 | Database | SQLite via stdlib `sqlite3` (no ORM) |
 | Conversion | Blender headless (`blender -b --factory-startup --python-exit-code 1 -P scripts/blender_export_proxy.py -- --input <file> <args>`) builds the thumbnail + GLB proxy for blend/obj/fbx, and for ma/mb after the detected Maya's `mayapy` runs `scripts/maya_export_fbx.py` into a temp FBX; `.blend` files also show their embedded thumbnail instantly while that job runs. Min Blender 4.2; dev machine has 5.2.2 LTS and Maya 2027 (Education) |
 | Tests | `pytest` (backend, parsers, scripts), `vitest` (frontend logic) |
-| Desktop shell | Dev: Vite dev server proxies `/api` and `/ws` to the daemon (`start.bat`, or `start.sh` on Linux/macOS). Release: PyInstaller `Blendex.exe` (`packaging/blendex.py`) runs the daemon, which serves the built UI, inside its own WebView2 window via `pywebview`; Inno Setup installer (`packaging/blendex.iss`). Build with `packaging/build.py` |
+| Desktop shell | Dev: Vite dev server proxies `/api` and `/ws` to the daemon (`start.bat`, or `start.sh` on Linux/macOS). Release: PyInstaller `Blendex` app (`packaging/blendex.py`) runs the daemon, which serves the built UI, inside its own `pywebview` window: WebView2 on Windows, Qt WebEngine (PyQt6 + PyQt6-WebEngine) on Linux. Windows ships an Inno Setup installer (`packaging/blendex.iss`); Linux ships `Blendex-<ver>-linux-x86_64.tar.gz` with a per-user `install.sh` (`~/.local/opt/blendex`). Build with `packaging/build.py` on the target OS |
 
 Do not add dependencies outside this table without an entry in `PLAN.md` → Decisions.
 

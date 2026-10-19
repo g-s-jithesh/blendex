@@ -1,16 +1,18 @@
 # Releasing Blendex
 
-Releases are built and published by [`.github/workflows/release.yml`](../.github/workflows/release.yml) on a Windows runner. Nobody uploads installers by hand.
+Releases are built and published by [`.github/workflows/release.yml`](../.github/workflows/release.yml) : the Windows installer on a Windows runner and the Linux tarball on an `ubuntu-22.04` runner. Nobody uploads files by hand.
 
 ## What the workflow does
 
-| Trigger | Builds `Blendex-<version>-Setup.exe` | Uploads it as a workflow artifact | Creates the GitHub release |
+| Trigger | Builds `Blendex-<version>-Setup.exe` and `Blendex-<version>-linux-x86_64.tar.gz` | Uploads it as a workflow artifact | Creates the GitHub release |
 |---|---|---|---|
-| Push a tag `vX.Y.Z` | yes | yes | yes, with generated notes and the installer attached |
+| Push a tag `vX.Y.Z` | yes | yes | yes, with generated notes, the installer and the Linux tarball attached |
 | Run it by hand (Actions → Release → Run workflow) | yes | yes | no |
 | Pull request touching `packaging/**`, `requirements*.txt` or the workflow | yes | yes | no |
 
 The build installs `requirements.txt` + `packaging/requirements.txt` on Python 3.14 and Node 24, installs Inno Setup 6 if the runner lacks it, and runs `python packaging/build.py`. On a tag it first checks that the tag, `VERSION` in `backend/app.py` and `version` in `frontend/package.json` all match, and fails otherwise.
+
+The Linux job apt-installs the libraries PyInstaller bundles for Qt WebEngine (NSS, ALSA, the xcb/xkb helpers, EGL/GL; the list is in the workflow), installs the same requirements and runs `python packaging/build.py`, which on Linux skips Inno Setup and writes `release/Blendex-<version>-linux-x86_64.tar.gz`. Building on 22.04 makes glibc 2.35 the minimum; don't move the job to a newer image without accepting that.
 
 ## Cutting a release
 
@@ -27,11 +29,11 @@ The build installs `requirements.txt` + `packaging/requirements.txt` on Python 3
    git push origin v1.2.0
    ```
 
-4. Watch the **Release** run under Actions. When it finishes, the release page has the notes and `Blendex-1.2.0-Setup.exe`. Edit the notes if needed.
+4. Watch the **Release** run under Actions. When it finishes, the release page has the notes, `Blendex-1.2.0-Setup.exe` and `Blendex-1.2.0-linux-x86_64.tar.gz`. Edit the notes if needed.
 
 If the version check fails, delete the tag (`git push --delete origin v1.2.0` and `git tag -d v1.2.0`), fix the versions in a pull request and tag again.
 
-To try a build without releasing, use **Run workflow** and download `Blendex-Setup` from the run's artifacts. Locally, `.venv\Scripts\python packaging\build.py` does the same (it needs Inno Setup 6: `winget install JRSoftware.InnoSetup`).
+To try a build without releasing, use **Run workflow** and download `Blendex-Setup` or `Blendex-linux` from the run's artifacts. Locally, `.venv\Scripts\python packaging\build.py` does the same on Windows (it needs Inno Setup 6: `winget install JRSoftware.InnoSetup`), and `python packaging/build.py` on Linux (Python 3.14, Node 24, the apt packages from `release.yml`).
 
 ## Free code signing (SignPath Foundation)
 
@@ -56,4 +58,4 @@ The installer is unsigned for now, so Windows SmartScreen shows "Windows protect
 3. Stores the submitter API token as the repository secret `SIGNPATH_API_TOKEN`.
 4. In `release.yml`, adds a signing step to the `installer` job right after the `upload` step, guarded with `if: github.ref_type == 'tag'`. The step uses `signpath/github-action-submit-signing-request@v3` with `api-token: ${{ secrets.SIGNPATH_API_TOKEN }}`, the organization id, the project and signing policy slugs, `github-artifact-id: ${{ steps.upload.outputs.artifact-id }}`, `wait-for-completion: true` and `output-artifact-directory: signed`. A second `upload-artifact` step then uploads `signed/*.exe` as `Blendex-Setup-signed`. Finally, the `release` job downloads that artifact instead of `Blendex-Setup`. The run waits until an approver accepts the request in SignPath.
 
-Only the setup file gets signed this way. Inno Setup compresses `Blendex.exe` into the installer, so signing the app inside too means a SignPath request before `ISCC` runs, which needs `packaging/build.py` split into two steps. SmartScreen only checks the downloaded installer, so start without it.
+The Linux tarball isn't signed; SignPath's Windows signing doesn't apply to it. Only the setup file gets signed this way. Inno Setup compresses `Blendex.exe` into the installer, so signing the app inside too means a SignPath request before `ISCC` runs, which needs `packaging/build.py` split into two steps. SmartScreen only checks the downloaded installer, so start without it.

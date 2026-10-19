@@ -1,2 +1,5 @@
 pyinstaller==6.22.3
-pywebview==6.2.1
+pywebview==6.2.1; sys_platform == "win32"
+pywebview[qt]==6.2.1; sys_platform == "linux"
+PyQt6==6.11.0; sys_platform == "linux"
+PyQt6-WebEngine==6.11.0; sys_platform == "linux"
