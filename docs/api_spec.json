@@ -462,7 +462,7 @@
     "/launch": {
       "post": {
         "operationId": "launch",
-        "description": "Opens the asset in the app via subprocess.Popen without a shell. Blender opens .blend directly and starts a new session that imports other formats; explorer/open-with take a raw command line string. asset_id must exist and app_id must come from GET /apps and list the asset's ext.",
+        "description": "Opens the asset in the app via subprocess.Popen without a shell. Blender opens .blend directly and starts a new session that imports other formats; explorer/open-with take a raw command line string; file-manager/default-app run dbus-send or xdg-open with an argv list. asset_id must exist and app_id must come from GET /apps and list the asset's ext.",
         "requestBody": {
           "required": true,
           "content": {
@@ -943,7 +943,7 @@
         "properties": {
           "id": {
             "type": "string",
-            "description": "e.g. blender-5.2, maya-2025; on Windows also explorer (show in folder) and open-with (Windows app picker)"
+            "description": "e.g. blender-5.2, maya-2025; on Windows also explorer (show in folder) and open-with (Windows app picker); on Linux also file-manager (show in folder via D-Bus FileManager1, else xdg-open on the folder) and default-app (xdg-open)"
           },
           "name": {
             "type": "string"
