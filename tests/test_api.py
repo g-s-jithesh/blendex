@@ -620,3 +620,11 @@ def test_ws_queue_updated_events(daemon, lib, monkeypatch):
         assert queue_events[-1]["data"] == {"queued": 0, "running": 0, "paused": False}
         assert all(a != b for a, b in itertools.pairwise(queue_events))
         drain(app, c)
+
+
+def test_uvicorn_has_a_websocket_implementation():
+    import uvicorn
+
+    config = uvicorn.Config("backend.app:create_app", factory=True)
+    config.load()
+    assert config.ws_protocol_class is not None
