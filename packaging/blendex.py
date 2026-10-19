@@ -1,7 +1,9 @@
 import ctypes
 import json
 import os
+import shutil
 import socket
+import subprocess
 import sys
 import threading
 import time
@@ -18,8 +20,13 @@ URL = f"http://{HOST}:{PORT}/"
 TITLE = "Blendex"
 BUNDLE = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
 LOG = Path(default_db_path()).parent / "blendex.log"
-WEBVIEW_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Blendex" / "webview"
+WINDOWS = sys.platform == "win32"
+WEBVIEW_DATA = Path(os.environ.get("LOCALAPPDATA", Path.home()) if WINDOWS else
+                    os.environ.get("XDG_DATA_HOME") or Path.home() / ".local" / "share") / "Blendex" / "webview"
+GUI = "edgechromium" if WINDOWS else "qt"
 WEBVIEW2_URL = "https://developer.microsoft.com/microsoft-edge/webview2/"
+QT_LIBS = ("Install the OpenGL libraries Qt needs (Debian/Ubuntu: sudo apt install libegl1 libgl1 libxcb-dri3-0) "
+           "and start Blendex again")
 BACKGROUND = "#0a0a0a"
 LOADING = (f"<body style='margin:0;height:100vh;display:grid;place-content:center;justify-items:center;gap:20px;"
            f"background:{BACKGROUND};color:#e5e5e5;font:600 22px system-ui,sans-serif'>Blendex"
@@ -28,7 +35,15 @@ LOADING = (f"<body style='margin:0;height:100vh;display:grid;place-content:cente
 
 
 def message(text: str, error: bool = False) -> None:
-    ctypes.windll.user32.MessageBoxW(None, text, TITLE, 0x10 if error else 0x40)
+    if WINDOWS:
+        ctypes.windll.user32.MessageBoxW(None, text, TITLE, 0x10 if error else 0x40)
+        return
+    for cmd in (["zenity", "--error" if error else "--info", "--no-markup", "--title", TITLE, "--text", text],
+                ["kdialog", "--title", TITLE, "--error" if error else "--msgbox", text]):
+        if shutil.which(cmd[0]):
+            subprocess.run(cmd, check=False)
+            return
+    print(text, file=sys.stderr)
 
 
 def running_blendex() -> bool:
@@ -40,6 +55,8 @@ def running_blendex() -> bool:
 
 
 def focus_running_window() -> bool:
+    if not WINDOWS:
+        return False
     user32, kernel32 = ctypes.windll.user32, ctypes.windll.kernel32
     hwnd = user32.FindWindowW(None, TITLE)
     while hwnd:
@@ -62,6 +79,9 @@ def focus_running_window() -> bool:
 # Binding first is instant; probing a free port over HTTP takes ~2 s on Windows before the refusal comes back.
 def claim_port() -> socket.socket | None:
     sock = socket.socket()
+    # Without it Linux refuses the port for ~60 s after the last run (TIME_WAIT); on Windows it would allow two listeners.
+    if not WINDOWS:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     try:
         sock.bind((HOST, PORT))
         sock.listen()
@@ -98,8 +118,10 @@ def serve(sock: socket.socket) -> None:
             window.destroy()
 
     try:
-        webview.start(boot, gui="edgechromium", private_mode=False, storage_path=str(WEBVIEW_DATA))
+        webview.start(boot, gui=GUI, private_mode=False, storage_path=str(WEBVIEW_DATA))
     except Exception as e:
+        if not WINDOWS:
+            raise RuntimeError(f"Qt WebEngine could not start ({e}).\n{QT_LIBS}") from e
         raise RuntimeError(f"the Microsoft Edge WebView2 Runtime is missing or broken ({e}).\n"
                            f"Install it from {WEBVIEW2_URL} and start Blendex again") from e
     finally:
@@ -112,7 +134,7 @@ def serve(sock: socket.socket) -> None:
 
 def main() -> None:
     LOG.parent.mkdir(parents=True, exist_ok=True)
-    if sys.stdout is None:
+    if sys.stdout is None or not (WINDOWS or sys.stdout.isatty()):
         sys.stdout = sys.stderr = open(LOG, "a", encoding="utf-8", buffering=1)  # noqa: SIM115
     sock = claim_port()
     if sock:
