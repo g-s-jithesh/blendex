@@ -67,4 +67,4 @@ This project was built with Claude Code. `CLAUDE.md`, `PLAN.md` and `.claude/age
 
 ## Releases
 
-Maintainers cut releases: bump `VERSION` in `backend/app.py`, run `.venv\Scripts\python packaging\build.py` (needs Inno Setup 6 and `pip install -r packaging\requirements.txt`), then publish `release\Blendex-<version>-Setup.exe` as a GitHub release.
+Maintainers cut releases by bumping the version and pushing a `vX.Y.Z` tag. The Release workflow then builds the installer and publishes the GitHub release. See [docs/RELEASING.md](docs/RELEASING.md), which also covers free code signing through the SignPath Foundation.
