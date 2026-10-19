@@ -8,6 +8,9 @@ from pathlib import Path
 
 import maya.api.OpenMaya as om
 import maya.utils
+
+# Installed into <version>/scripts (on Maya's sys.path); from the repo it is the plug-in's sibling.
+import maya_safety
 from maya import cmds, mel
 
 IMPORTERS = {
@@ -55,7 +58,9 @@ def import_file(path: str) -> list[str]:
     if fbx_mode:
         mel.eval("FBXImportMode -v add")
     try:
-        cmds.file(path, i=True, type=file_type, ignoreVersion=True)
+        with maya_safety.untrusted_scene(path):
+            cmds.file(path, i=True, type=file_type, ignoreVersion=True, executeScriptNodes=False,
+                      loadReferenceDepth="none")
     finally:
         if fbx_mode:
             mel.eval(f"FBXImportMode -v {fbx_mode}")
@@ -76,6 +81,8 @@ def run_on_main_thread(request: dict, reply: queue.Queue, expired: threading.Eve
         return
     try:
         reply.put(handle(request))
+    except maya_safety.UnsafeScene as e:
+        reply.put({"ok": False, "error": str(e)})
     except Exception as e:  # noqa: BLE001
         reply.put({"ok": False, "error": f"{type(e).__name__}: {e}"})
 

@@ -112,7 +112,8 @@ def test_random_flips_never_raise(parse):
         assert parse(rng.randbytes(rng.randrange(1, 5000))) is None, i
 
 
-def test_indexing_stores_maya_version(daemon, lib):
+def test_indexing_stores_maya_version(daemon, lib, monkeypatch):
+    monkeypatch.delenv("DAM_CONVERT")
     (lib / "cube.mb").write_bytes(MB_2027)
     (lib / "cube.ma").write_bytes(MA_2027)
     (lib / "old.mb").write_bytes(MB_2012)
@@ -122,8 +123,8 @@ def test_indexing_stores_maya_version(daemon, lib):
         drain(app, c)
         got = by_name(c)
     assert {k: (v["dcc_version"], v["status"], v["has_thumbnail"], v["has_proxy"]) for k, v in got.items()} == {
-        "cube.mb": ("2027", "unsupported", False, False), "cube.ma": ("2027", "unsupported", False, False),
-        "old.mb": ("2012", "unsupported", False, False), "junk.mb": (None, "unsupported", False, False),
+        "cube.mb": ("2027", "pending", False, False), "cube.ma": ("2027", "pending", False, False),
+        "old.mb": ("2012", "pending", False, False), "junk.mb": (None, "pending", False, False),
     }
 
 

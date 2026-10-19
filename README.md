@@ -71,7 +71,7 @@ Each preview decodes its model in a Draco decoder worker that is shut down as so
 | `.blend` | ✔ (saved preview, then a 512 px render) | ✔ | ✔ opens the file | ✔ appends its objects |
 | `.obj`, `.fbx` | ✔ | ✔ | ✔ imported into a new scene | ✔ |
 | `.glb`, `.gltf`, `.stl`, `.ply`, `.usd`, `.usda`, `.usdc`, `.usdz`, `.abc` | — | — | ✔ imported into a new scene | ✔ |
-| `.ma`, `.mb` | — | — | — | — |
+| `.ma`, `.mb` | ✔ (needs Maya and Blender) | ✔ | — (use **Open in Maya**) | — (see Maya below) |
 
 Every indexed file can also be shown in Explorer or opened with any app through Windows' **Open with** picker. `.ma`/`.mb` files also get **Open in Maya** if Maya is installed in its default folder (tested with Maya 2027).
 
@@ -94,6 +94,7 @@ Blendex never modifies or deletes your original files.
 - Blendex only listens on `127.0.0.1` (port 8765), so other computers on your network cannot reach it.
 - The Blender and Maya bridges also listen only on `127.0.0.1`, requires a random per-session token, and accepts only "import this 3D file" requests. It cannot run code sent to it.
 - Blender opens your `.blend` files with embedded scripts disabled while making thumbnails.
+- Maya scene files can contain code, so before Maya opens one for a thumbnail or an import, Blendex refuses `.ma` files containing anything other than the commands Maya itself writes, disables expressions and script nodes, and does not load references (previews therefore show only the scene's own geometry). The thumbnail job also runs with its own Maya preferences folder and without third-party plug-ins. This lowers the risk of downloaded scenes but is not a sandbox: only add libraries you would open in Maya anyway.
 - No telemetry and no network access, apart from Blender and WebView2 themselves, unless you turn on **Check for updates**. That switch is off by default. When it is on, Blendex asks GitHub's public API for the latest release once each time it starts. The request sends nothing about you or your files beyond what any web request carries (your IP address).
 
 ## Troubleshooting
@@ -106,6 +107,8 @@ Blendex never modifies or deletes your original files.
 | Cards stay on **Pending**, or show **Conversion failed** with "Blender not found" when you hover them | Install Blender 4.2+ in the default folder, or point Blendex at it with `DAM_BLENDER` (see below). |
 | An open Blender is not listed under **Import into…** | Install the bridge from the header (with Blender closed), then restart Blender. A Blender that is busy rendering is not listed until it is idle. |
 | **Install Maya bridge** fails with "start Maya once" | Open that Maya once so it creates its preferences, close it, then install again. Install with Maya closed: a Maya that is open while you install drops the autoload entry when it quits. |
+| `.ma`/`.mb` cards fail with "Maya not found" | Install Maya in its default folder, or point Blendex at its `mayapy` with `DAM_MAYAPY`. The first Maya thumbnail after a start can take 30 s or more. |
+| A `.ma` card fails with "scene contains commands Blendex will not run" | The file holds MEL that Maya's own writer never produces (often an embedded script or virus). Open it in Maya only if you trust where it came from. |
 | Blender prints `Add-on not loaded: "dam_bridge"` at startup | Click **Install Blender X.Y bridge** again in Blendex to reinstall the add-on. |
 | Anything else | See `%APPDATA%\dam\blendex.log` and [open an issue](https://github.com/g-s-jithesh/blendex/issues). |
 
@@ -116,6 +119,7 @@ Optional environment variables (set them before starting Blendex):
 | Variable | Default | Effect |
 |---|---|---|
 | `DAM_BLENDER` | newest detected Blender | Full path to the `blender.exe` used for thumbnails and previews |
+| `DAM_MAYAPY` | `mayapy` of the newest detected Maya | Full path to the `mayapy.exe` used to read `.ma`/`.mb` for thumbnails and previews |
 | `DAM_WORKERS` | a quarter of your CPU cores (at least 1) | How many Blender conversions run at once |
 | `DAM_JOB_TIMEOUT` | `600` | Seconds before a stuck conversion is stopped |
 | `DAM_CONVERT` | on demand | `all` converts every `.blend`, `.obj` and `.fbx` as soon as it is indexed, instead of only the cards you scroll to or hover |

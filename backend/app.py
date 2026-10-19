@@ -283,12 +283,15 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
     def bridge_apps() -> list[dict]:
         return [a for a in db.list_apps(app.state.conn) if a["id"].startswith(("blender", "maya")) and a["version"]]
 
-    def bridge_path(a: dict) -> Path:
-        return (bridge.maya_plugin_path if a["id"].startswith("maya") else bridge.addon_path)(a["version"])
+    def bridge_installed(a: dict) -> bool:
+        if not a["id"].startswith("maya"):
+            return bridge.addon_path(a["version"]).is_file()
+        plugin = bridge.maya_plugin_path(a["version"])
+        return plugin.is_file() and (plugin.parent.parent / "scripts" / "maya_safety.py").is_file()
 
     @app.get("/api/bridges")
     async def list_bridges() -> list[dict]:
-        return [{"app_id": a["id"], "name": a["name"], "installed": bridge_path(a).is_file()} for a in bridge_apps()]
+        return [{"app_id": a["id"], "name": a["name"], "installed": bridge_installed(a)} for a in bridge_apps()]
 
     @app.post("/api/bridges/{app_id}", status_code=204)
     async def install_bridge(app_id: str) -> Response:

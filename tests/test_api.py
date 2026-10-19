@@ -245,7 +245,7 @@ def test_conversion_failure_and_unsupported(daemon, lib, monkeypatch, spawn_log)
     write(lib / "p.blend", preview_blend())
     write(lib / "m.obj")
     write(lib / "x.stl")
-    write(lib / "y.ma")
+    write(lib / "y.ply")
     with daemon() as (app, c):
         add_library(c, lib)
         drain(app, c)
@@ -258,11 +258,11 @@ def test_conversion_failure_and_unsupported(daemon, lib, monkeypatch, spawn_log)
         assert (p["status"], p["error"], p["has_proxy"], p["has_thumbnail"]) == ("failed", "fake failure", False, True)
         assert c.get(f"/api/assets/{p['id']}/thumbnail").status_code == 200
         assert_error(c.get(f"/api/assets/{p['id']}/proxy"), 404, "NOT_FOUND")
-        for name in ("x.stl", "y.ma"):
+        for name in ("x.stl", "y.ply"):
             a = got[name]
             assert (a["status"], a["error"], a["has_proxy"], a["has_thumbnail"]) == ("unsupported", None, False, False)
             assert_error(c.post(f"/api/assets/{a['id']}/convert"), 409, "UNSUPPORTED")
-        for name in ("a.blend", "m.obj", "x.stl", "y.ma"):
+        for name in ("a.blend", "m.obj", "x.stl", "y.ply"):
             assert_error(c.get(f"/api/assets/{got[name]['id']}/proxy"), 404, "NOT_FOUND")
             assert_error(c.get(f"/api/assets/{got[name]['id']}/thumbnail"), 404, "NOT_FOUND")
         drain(app, c)

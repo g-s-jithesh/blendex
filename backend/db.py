@@ -161,6 +161,14 @@ def reroute_ids(conn: sqlite3.Connection, library_id: int) -> list[int]:
     return [r[0] for r in rows]
 
 
+def pend_unsupported(conn: sqlite3.Connection, library_id: int, exts: set[str]) -> None:
+    conn.execute(
+        "UPDATE versions SET status = 'pending', error = NULL WHERE status = 'unsupported' AND id IN"
+        " (SELECT current_version_id FROM assets WHERE library_id = ? AND ext IN (SELECT value FROM json_each(?)))",
+        (library_id, json.dumps(sorted(exts))),
+    )
+
+
 def set_status(conn: sqlite3.Connection, version_id: int, status: str, error: str | None = None) -> None:
     conn.execute("UPDATE versions SET status = ?, error = ? WHERE id = ?", (status, error, version_id))
 
