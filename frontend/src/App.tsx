@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type FormEve
 import { api, errorText, type App as DccApp, type Bridge, type Library, type TagCount } from "./api";
 import { AssetCard, type EditAsset } from "./AssetCard";
 import { QueueIndicator } from "./QueueIndicator";
+import { UpdateNotice } from "./UpdateNotice";
 import { optimisticEdit, useAssets, type AssetFilters } from "./useAssets";
 import { useHoverPreview } from "./useHoverPreview";
 
@@ -170,6 +171,7 @@ export function App() {
         <span className="ml-auto text-neutral-400">
           {loading ? "Loading…" : `${page.items.length} of ${page.total} assets`}
         </span>
+        <UpdateNotice />
       </header>
       {shownError && (
         <div role="alert" className="mx-4 mt-3 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{shownError}</div>
