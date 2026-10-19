@@ -265,31 +265,36 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
     @app.post("/api/sessions/{session_id}/import")
     async def import_into_session(session_id: str, body: ImportRequest) -> dict:
         asset = asset_or_404(body.asset_id)
-        if asset["ext"] not in bridge.IMPORT_EXTS:
-            raise ApiError(409, "UNSUPPORTED", f"Blender cannot import .{asset['ext']} files")
+        session_app = bridge.session_app(session_id)
+        if session_app is None:
+            raise ApiError(404, "NOT_FOUND", f"session {session_id} is not running")
+        if asset["ext"] not in session_app[1]:
+            raise ApiError(409, "UNSUPPORTED", f"{session_app[0]} cannot import .{asset['ext']} files")
         if not Path(asset["path"]).is_file():
             raise ApiError(404, "NOT_FOUND", f"file missing on disk: {asset['path']}")
         try:
             imported = await asyncio.to_thread(bridge.import_into, session_id, asset["path"])
         except LookupError as e:
-            raise ApiError(404, "NOT_FOUND", f"Blender session {session_id} is not running") from e
+            raise ApiError(404, "NOT_FOUND", f"{session_app[0]} session {session_id} is not running") from e
         except bridge.BridgeError as e:
             raise ApiError(502, "BRIDGE_FAILED", str(e)) from e
         return {"imported": imported}
 
-    def blender_apps() -> list[dict]:
-        return [a for a in db.list_apps(app.state.conn) if a["id"].startswith("blender") and a["version"]]
+    def bridge_apps() -> list[dict]:
+        return [a for a in db.list_apps(app.state.conn) if a["id"].startswith(("blender", "maya")) and a["version"]]
+
+    def bridge_path(a: dict) -> Path:
+        return (bridge.maya_plugin_path if a["id"].startswith("maya") else bridge.addon_path)(a["version"])
 
     @app.get("/api/bridges")
     async def list_bridges() -> list[dict]:
-        return [{"app_id": a["id"], "name": a["name"], "installed": bridge.addon_path(a["version"]).is_file()}
-                for a in blender_apps()]
+        return [{"app_id": a["id"], "name": a["name"], "installed": bridge_path(a).is_file()} for a in bridge_apps()]
 
     @app.post("/api/bridges/{app_id}", status_code=204)
     async def install_bridge(app_id: str) -> Response:
-        target = next((a for a in blender_apps() if a["id"] == app_id), None)
+        target = next((a for a in bridge_apps() if a["id"] == app_id), None)
         if not target:
-            raise ApiError(404, "NOT_FOUND", f"no Blender install with id {app_id}")
+            raise ApiError(404, "NOT_FOUND", f"no Blender or Maya install with id {app_id}")
         try:
             await asyncio.to_thread(bridge.install, target["executable"])
         except (bridge.BridgeError, OSError, subprocess.TimeoutExpired) as e:

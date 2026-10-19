@@ -123,6 +123,7 @@ type QueueState = { queued: number; running: number; paused: boolean };
 - `/apps` lists detected Blender (`blend` opens directly; obj/fbx/glb/gltf/stl/ply/usd*/abc start a new Blender that runs `scripts/blender_open_import.py`), Maya (`ma`/`mb`, opened directly; verified on 2027), and on Windows `explorer` (show in folder) and `open-with` (Windows app picker) for every indexed ext.
 - Importing into an already-open Blender needs the `scripts/dam_bridge.py` add-on, installed via `POST /bridges/{app_id}` (runs `scripts/install_dam_bridge.py` in that Blender, saves its user prefs). Each GUI session listens on `127.0.0.1:<random port>` and writes `<APPDATA>/dam/sessions/blender-<pid>.json` (`DAM_SESSIONS` overrides) with the port and a random token.
 - Bridge protocol: one JSON line per connection `{"token", "cmd": "info"|"import", "path"?}`, one JSON line back. Commands run on Blender's main thread via a timer; there is no command that executes code. `.blend` imports append its objects; every import is one undo step.
+- Importing into an already-open Maya needs the `scripts/maya_bridge.py` plug-in, installed via `POST /bridges/maya-<ver>`: that Maya's `mayapy` runs `scripts/install_maya_bridge.py`, which copies it to `<prefs root>/<ver>/plug-ins/maya_bridge.py` (prefs root = `MAYA_APP_DIR`, else the Documents known folder `/maya` on Windows, `~/maya` on Linux, `~/Library/Preferences/Autodesk/maya` on macOS) and appends its autoload line to `prefs/pluginPrefs.mel`. It refuses (`Error: start Maya <ver> once ...`) until that Maya has created its prefs. GUI sessions write `maya-<pid>.json`; same protocol, commands run via `maya.utils.executeDeferred`. Maya imports `ma mb obj fbx dae usd usda usdc usdz abc stl`; Maya's `file -import` clears its undo queue, so Maya imports are not undoable.
 - Tests that run a real Blender installer must set `BLENDER_USER_RESOURCES` to a temp dir; Blender 5.2 ignores `BLENDER_USER_CONFIG` and would rewrite the user's real preferences.
 
 ### WebSocket events (server → client only)
@@ -155,7 +156,7 @@ Contract changes go through the architect: update this section and `PLAN.md` →
 ## Security Boundaries
 
 - Subprocesses use argv lists, never `shell=True`. The only exceptions are `explorer`/`open-with`, which parse their own raw command line, so they get a string (still no shell; Windows paths cannot contain `"`). `/launch` only accepts an `asset_id` that exists in the DB and an `app_id` from `/apps`.
-- Bridge sessions bind `127.0.0.1` only, require the per-session token, accept only `info`/`import` of known 3D exts, and session ids must match `blender-<digits>` before any file lookup.
+- Bridge sessions bind `127.0.0.1` only, require the per-session token, accept only `info`/`import` of known 3D exts, and session ids must match `(blender|maya)-<digits>` before any file lookup.
 - Header parsers read a bounded byte count and never trust lengths from the file.
 - File-serving endpoints only serve files resolved inside a registered library's `.cache/`.
 - The worker refuses to write previews when a library's `.cache` resolves outside the library (a symlink or junction): the asset fails with a clear error instead.

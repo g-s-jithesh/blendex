@@ -13,7 +13,7 @@ import anyio
 import pytest
 from fastapi.testclient import TestClient
 
-from backend import dcc, indexer
+from backend import bridge, dcc, indexer
 from backend.app import create_app
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -212,8 +212,14 @@ def spawned(log: Path) -> list[tuple[str, str]]:
     return [(Path(p).name, mode) for p, mode in (entry.split("\t") for entry in entries)]
 
 
-BLENDERS = sorted((a for a in dcc.detect_apps() if a["id"].startswith("blender")), key=dcc._version_key)
+APPS = dcc.detect_apps()
+BLENDERS = sorted((a for a in APPS if a["id"].startswith("blender")), key=dcc._version_key)
 BLENDER = BLENDERS[-1]["executable"] if BLENDERS else None
+MAYAS = sorted((a for a in APPS if a["id"].startswith("maya-") and bridge.mayapy(a["executable"]).is_file()),
+               key=dcc._version_key)
+MAYA = MAYAS[-1] if MAYAS else None
+MAYA_ENV = {"MAYA_SKIP_USERSETUP_PY": "1", "MAYA_DISABLE_CIP": "1", "MAYA_DISABLE_CER": "1",
+            "MAYA_DISABLE_CLIC_IPM": "1"}
 FIXTURES = ROOT / "tests" / "fixtures" / "out"
 FIXTURE_NAMES = ["preview.blend", "preview_zstd.blend", "nopreview.blend", "camera.blend", "empty_scene.blend",
                  "suzanne.obj", "suzanne.fbx", "truncated.blend", "empty.blend", "edit_mode.blend",
@@ -242,7 +248,9 @@ def daemon(tmp_path, monkeypatch, spawn_log):
     monkeypatch.setenv("DAM_WORKERS", "2")
     monkeypatch.setenv("DAM_CONVERT", "all")
     monkeypatch.setenv("FAKE_BLENDER_LOG", str(spawn_log))
-    for k in ("DAM_DB", "DAM_JOB_TIMEOUT", "FAKE_BLENDER_SLEEP", "FAKE_BLENDER_FAIL"):
+    monkeypatch.setenv("DAM_SESSIONS", str(tmp_path / "sessions"))
+    monkeypatch.setenv("MAYA_APP_DIR", str(tmp_path / "maya_prefs"))
+    for k in ("DAM_DB", "DAM_JOB_TIMEOUT", "DAM_MAYAPY", "FAKE_BLENDER_SLEEP", "FAKE_BLENDER_FAIL"):
         monkeypatch.delenv(k, raising=False)
 
     @contextmanager
