@@ -7,15 +7,20 @@ import secrets
 import signal
 import sqlite3
 import subprocess
+import sys
 import time
 from collections.abc import Callable
 from pathlib import Path
 
 from . import db, dcc
 from .blend_preview import read_embedded_preview, rgba_to_png
+from .bridge import mayapy
 from .indexer import CONVERTIBLE, PROXY_EXTS
 
-SCRIPT = Path(__file__).resolve().parent.parent / "scripts" / "blender_export_proxy.py"
+SCRIPTS = Path(__file__).resolve().parent.parent / "scripts"
+SCRIPT = SCRIPTS / "blender_export_proxy.py"
+MAYA_SCRIPT = SCRIPTS / "maya_export_fbx.py"
+MAYA_EXTS = {"ma", "mb"}
 REPLACE_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
 log = logging.getLogger(__name__)
 
@@ -90,6 +95,28 @@ def _read_meta(path: str) -> dict:
     return meta if isinstance(meta, dict) else {}
 
 
+def mayapy_command(conn: sqlite3.Connection) -> list[str] | None:
+    exe = os.environ.get("DAM_MAYAPY")
+    if not exe:
+        mayas = [a for a in db.list_apps(conn) if a["id"].startswith("maya")]
+        path = mayapy(max(mayas, key=dcc._version_key)["executable"]) if mayas else None
+        exe = str(path) if path and path.is_file() else None
+    if not exe:
+        return None
+    return [sys.executable, exe] if exe.lower().endswith(".py") else [exe]
+
+
+def maya_app_dir(conn: sqlite3.Connection) -> Path:
+    db_file = conn.execute("PRAGMA database_list").fetchone()[2]
+    return Path(db_file or db.default_db_path()).parent / "maya"
+
+
+def _failure(meta: dict, rc: int | None, timeout: float, script: str) -> str:
+    if meta.get("error"):
+        return str(meta["error"])
+    return f"timed out after {timeout:g}s" if rc is None else f"exit code {rc}" if rc else f"{script} wrote no output"
+
+
 class Worker:
     def __init__(self, conn: sqlite3.Connection, publish: Callable[[str, dict | None], None],
                  on_queue: Callable[[dict], None]):
@@ -106,6 +133,8 @@ class Worker:
         self.concurrency = int(os.environ.get("DAM_WORKERS") or max(1, (os.cpu_count() or 1) // 4))
         self.timeout = float(os.environ.get("DAM_JOB_TIMEOUT") or 600)
         self.tasks: list[asyncio.Task] = []
+        self.maya_warm = False
+        self.maya_first = asyncio.Lock()
 
     def busy(self) -> bool:
         return bool(self.running or (self.queued and self.unpaused.is_set()))
@@ -190,24 +219,57 @@ class Worker:
         self.conn.commit()
         self.publish(event, db.get_asset(self.conn, asset_id))
 
+    def _fail(self, asset_id: int, vid: int, error: str) -> None:
+        if db.current_version_id(self.conn, asset_id) == vid:
+            db.set_status(self.conn, vid, "failed", error)
+            self._emit("conversion.failed", asset_id)
+
+    async def _export_fbx(self, cmd: list[str], src: str, fbx: str, meta_path: str) -> str | None:
+        if self.maya_warm:
+            return await self._mayapy(cmd, src, fbx, meta_path)
+        # Two mayapy processes initialising a fresh MAYA_APP_DIR at once make one fail, so the first runs alone.
+        async with self.maya_first:
+            error = await self._mayapy(cmd, src, fbx, meta_path)
+            self.maya_warm = self.maya_warm or error is None
+            return error
+
+    async def _mayapy(self, cmd: list[str], src: str, fbx: str, meta_path: str) -> str | None:
+        app_dir = maya_app_dir(self.conn)
+        app_dir.mkdir(parents=True, exist_ok=True)
+        # A dedicated MAYA_APP_DIR keeps the user's Maya prefs, userSetup and plug-in autoloads out of the job.
+        rc = await self._run([*cmd, str(MAYA_SCRIPT), "--input", src, "--out-fbx", fbx, "--out-meta", meta_path],
+                             os.environ | {"MAYA_APP_DIR": str(app_dir)})
+        meta = _read_meta(meta_path)
+        if rc == 0 and meta.get("ok") and os.path.isfile(fbx):
+            return None
+        return _failure(meta, rc, self.timeout, "Maya export script")
+
     async def convert(self, asset_id: int) -> None:
         asset = db.get_asset(self.conn, asset_id)
         if not asset or asset["ext"] not in CONVERTIBLE:
             return
         vid = db.current_version_id(self.conn, asset_id)
         cmd = dcc.blender_command(self.conn)
+        maya_cmd = mayapy_command(self.conn) if asset["ext"] in MAYA_EXTS else None
         if not cmd:
-            db.set_status(self.conn, vid, "failed", "Blender not found; install Blender or set DAM_BLENDER")
-            return self._emit("conversion.failed", asset_id)
+            return self._fail(asset_id, vid, "Blender not found; install Blender or set DAM_BLENDER")
+        if asset["ext"] in MAYA_EXTS and not maya_cmd:
+            return self._fail(asset_id, vid, "Maya not found; install Maya or set DAM_MAYAPY")
         db.set_status(self.conn, vid, "converting")
         self._emit("conversion.started", asset_id)
         full = asset["ext"] in PROXY_EXTS
         cache = cache_dir(db.get_library(self.conn, asset["library_id"])["path"])
         tmp = cache / f"{asset_id}.{secrets.token_hex(4)}.tmp"
         glb, png, meta_path = f"{tmp}.glb", f"{tmp}.png", f"{tmp}.json"
+        fbx, maya_meta = f"{tmp}.fbx", f"{tmp}.maya.json"
         try:
+            src = asset["path"]
+            if maya_cmd:
+                if error := await self._export_fbx(maya_cmd, src, fbx, maya_meta):
+                    return self._fail(asset_id, vid, error)
+                src = fbx
             rc = await self._run([*cmd, "-b", "--factory-startup", "--python-exit-code", "1", "-P", str(SCRIPT),
-                                  "--", "--input", asset["path"], "--out-png", png, "--out-meta", meta_path,
+                                  "--", "--input", src, "--out-png", png, "--out-meta", meta_path,
                                   *(["--out-glb", glb] if full else [])])
             meta = _read_meta(meta_path)
             if db.current_version_id(self.conn, asset_id) != vid:
@@ -219,19 +281,16 @@ class Worker:
                 db.set_result(self.conn, vid, meta.get("poly_count"), meta.get("proxy_poly_count") if full else None,
                               full)
                 return self._emit("conversion.done", asset_id)
-            error = meta.get("error") or (f"timed out after {self.timeout:g}s" if rc is None
-                                          else f"exit code {rc}" if rc else "proxy script wrote no output")
-            db.set_status(self.conn, vid, "failed", str(error))
-            self._emit("conversion.failed", asset_id)
+            self._fail(asset_id, vid, _failure(meta, rc, self.timeout, "proxy script"))
         finally:
-            for f in (glb, png, meta_path):
+            for f in (glb, png, meta_path, fbx, maya_meta):
                 with contextlib.suppress(OSError):
                     os.remove(f)
 
-    async def _run(self, argv: list[str]) -> int | None:
+    async def _run(self, argv: list[str], env: dict[str, str] | None = None) -> int | None:
         kw = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {"start_new_session": True}
         proc = await asyncio.create_subprocess_exec(*argv, stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
-                                                    stderr=subprocess.DEVNULL, **kw)
+                                                    stderr=subprocess.DEVNULL, env=env, **kw)
         self.procs.add(proc)
         try:
             return await asyncio.wait_for(proc.wait(), self.timeout)

@@ -12,7 +12,7 @@ from .blend_header import parse_blend_header
 from .maya_header import parse_maya_header
 
 EXTS = {"blend", "ma", "mb", "fbx", "obj", "glb", "gltf", "usd", "usda", "usdc", "usdz", "abc", "stl", "ply"}
-PROXY_EXTS = {"blend", "obj", "fbx"}
+PROXY_EXTS = {"blend", "obj", "fbx", "ma", "mb"}
 CONVERTIBLE = PROXY_EXTS
 VERSIONED = {"blend", "ma", "mb"}
 DEBOUNCE = 0.5
@@ -93,6 +93,8 @@ class Indexer:
         self.spawn(self._initial(lib))
 
     async def _initial(self, lib: dict) -> None:
+        with self.conn:
+            db.pend_unsupported(self.conn, lib["id"], CONVERTIBLE)
         routed = await self.sync(lib, lib["path"])
         for asset_id in db.reroute_ids(self.conn, lib["id"]) if self.eager else []:
             if asset_id not in routed:

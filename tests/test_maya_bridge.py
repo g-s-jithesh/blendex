@@ -164,6 +164,8 @@ def test_bridges_lists_and_installs_maya(daemon, fake_maya, tmp_path):
         assert_shape(r.json(), {"type": "array", "items": {"$ref": "Bridge"}})
         assert r.json() == [{"app_id": "maya-2027", "name": "Maya 2027", "installed": False}]
         write(tmp_path / "maya_prefs" / "2027" / "plug-ins" / "maya_bridge.py")
+        assert c.get("/api/bridges").json()[0]["installed"] is False
+        write(tmp_path / "maya_prefs" / "2027" / "scripts" / "maya_safety.py")
         assert c.get("/api/bridges").json()[0]["installed"] is True
 
         run((0, "C:/x/plug-ins/maya_bridge.py\n", ""))
