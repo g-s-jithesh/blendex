@@ -123,7 +123,7 @@ async function setup(page: Page) {
     centers.push({ x: box.x + box.width / 2, y: box.y + box.height / 2 });
     bottom = Math.max(bottom, cardBox.y + cardBox.height);
   }
-  const empty = { x: 10, y: bottom + 40 };
+  const empty = { x: 10, y: bottom + 200 };
   expect(empty.y, "all 20 cards must fit in the viewport so no scroll is needed").toBeLessThan(1190);
   return { log, net, centers, empty };
 }
@@ -346,3 +346,74 @@ test("Draco decoder is served from /draco/, not the SPA fallback page", async ({
   expect(wrapper.headers()["content-type"]).toMatch(/javascript/);
   expect(await wrapper.text()).toContain("DracoDecoderModule");
 });
+
+const barScale = (page: Page) =>
+  page.evaluate(() => {
+    const bar = document.querySelector("[data-hover-bar]");
+    return bar ? new DOMMatrix(getComputedStyle(bar).transform).a : null;
+  });
+const boxes = (page: Page) =>
+  page.locator("[data-asset-id]").evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as DOMRect));
+const SHOTS = process.env.E2E_SHOTS;
+
+for (const deviceScaleFactor of [1, 1.25, 1.5]) {
+  test.describe(`popup at ${deviceScaleFactor * 100}% scaling`, () => {
+    test.use({ deviceScaleFactor });
+
+    test("load bar fills until 2 s, then a larger popup covers the card without moving the grid; leaving it releases everything", async ({ page }) => {
+      const { log, centers, empty } = await setup(page);
+      const view = page.viewportSize()!;
+      await page.waitForLoadState("networkidle");
+      const grid = await boxes(page);
+      for (const id of [2, 12, 20]) {
+        const card = grid[id - 1];
+        await page.mouse.move(centers[id - 1].x, centers[id - 1].y);
+        const t0 = Date.now();
+        await page.waitForTimeout(150);
+        expect(await barScale(page), "no bar before 300 ms").toBe(0);
+        await page.waitForTimeout(1150 - (Date.now() - t0));
+        const scale = (await barScale(page))!;
+        const expected = (Date.now() - t0 - 300) / 1700;
+        expect(Math.abs(scale - expected), `bar ${scale} vs ${expected}`).toBeLessThan(0.15);
+        if (SHOTS && id === 12 && deviceScaleFactor === 1) {
+          const clip = { x: card.x - 20, y: card.y - 20, width: card.width + 40, height: card.height + 40 };
+          await page.screenshot({ path: `${SHOTS}/progress-bar.png`, clip });
+        }
+        await expect(page.locator("[data-hover-viewport] canvas")).toHaveCount(1);
+        expect(await barScale(page), "bar hidden once the preview is open").toBeNull();
+        await expect.poll(async () => (await state(page)).memory?.geometries ?? 0).toBeGreaterThan(0);
+        await page.waitForTimeout(300);
+
+        const popup = (await page.locator("[data-hover-viewport]").boundingBox())!;
+        const canvas = page.locator("[data-hover-viewport] canvas");
+        const size = Math.min(Math.max(card.width * 1.6, 360), 560);
+        expect(popup.width).toBeCloseTo(size, 0);
+        expect(popup.height).toBeCloseTo(size, 0);
+        expect(popup.x).toBeGreaterThanOrEqual(8 - 0.5);
+        expect(popup.y).toBeGreaterThanOrEqual(8 - 0.5);
+        expect(popup.x + popup.width).toBeLessThanOrEqual(view.width - 8 + 0.5);
+        expect(popup.y + popup.height).toBeLessThanOrEqual(view.height - 8 + 0.5);
+        if (popup.x + popup.width < view.width - 8.5) expect(popup.x + popup.width / 2).toBeCloseTo(card.x + card.width / 2, 0);
+        expect(popup.y + popup.height / 2).toBeCloseTo(card.y + card.height / 2, 0);
+        const cbox = (await canvas.boundingBox())!;
+        expect([cbox.width, cbox.height]).toEqual([popup.width, popup.height]);
+        const backing = await canvas.evaluate((c: HTMLCanvasElement) => c.width);
+        expect(Math.abs(backing - popup.width * deviceScaleFactor), `backing ${backing}`).toBeLessThanOrEqual(2);
+        expect(await boxes(page), "grid must not move").toEqual(grid);
+        if (SHOTS && id === 12 && deviceScaleFactor === 1) await page.screenshot({ path: `${SHOTS}/popup.png` });
+
+        await page.mouse.move(popup.x + popup.width * 0.25, popup.y + popup.height * 0.5, { steps: 4 });
+        await page.mouse.down();
+        await page.mouse.move(popup.x + popup.width * 0.75, popup.y + popup.height * 0.4, { steps: 8 });
+        await page.mouse.up();
+        await page.mouse.move(popup.x + 4, popup.y + popup.height - 4, { steps: 4 });
+        await page.waitForTimeout(200);
+        expect(await state(page), "orbit drag and covered neighbours keep it open").toMatchObject({ contexts: 1, viewports: 1 });
+
+        await page.mouse.move(empty.x, empty.y);
+        await expectReleased(page);
+      }
+      expect(badLogs(log)).toEqual([]);
+    });
+  });
+}

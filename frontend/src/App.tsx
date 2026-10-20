@@ -1,6 +1,8 @@
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api, errorText, type App as DccApp, type Bridge, type Library, type TagCount } from "./api";
 import { AssetCard, type EditAsset } from "./AssetCard";
+import { BlenderBanner, hasBlender } from "./BlenderBanner";
+import { Combobox } from "./Combobox";
 import { QueueIndicator } from "./QueueIndicator";
 import { UpdateNotice } from "./UpdateNotice";
 import { optimisticEdit, useAssets, type AssetFilters } from "./useAssets";
@@ -13,6 +15,7 @@ export const SEARCH_DEBOUNCE_MS = 250;
 export function App() {
   const [libraries, setLibraries] = useState<Library[]>([]);
   const [apps, setApps] = useState<DccApp[]>([]);
+  const [appsLoaded, setAppsLoaded] = useState(false);
   const [libraryId, setLibraryId] = useState<number | undefined>(undefined);
   const [ext, setExt] = useState("");
   const [qInput, setQInput] = useState("");
@@ -38,7 +41,15 @@ export function App() {
 
   useEffect(() => {
     api.listLibraries().then(setLibraries, (e: unknown) => setError(errorText(e)));
-    api.listApps().then(setApps, (e: unknown) => setError(errorText(e)));
+    api.listApps().then((a) => {
+      setApps(a);
+      setAppsLoaded(true);
+    }, (e: unknown) => setError(errorText(e)));
+    api.listBridges().then(setBridges, (e: unknown) => setError(errorText(e)));
+  }, []);
+
+  const appsChanged = useCallback((next: DccApp[]) => {
+    setApps(next);
     api.listBridges().then(setBridges, (e: unknown) => setError(errorText(e)));
   }, []);
 
@@ -79,7 +90,11 @@ export function App() {
   );
   const hover = useHoverPreview();
 
-  const knownExts = useMemo(() => [...new Set(["blend", ...apps.flatMap((a) => a.exts)])], [apps]);
+  const extOptions = useMemo(
+    () => [...new Set(["blend", ...apps.flatMap((a) => a.exts)])].sort().map((x) => ({ value: x, label: x })),
+    [apps],
+  );
+  const tagOptions = useMemo(() => tags.map((t) => ({ value: t.tag, label: `${t.tag} (${t.count})` })), [tags]);
 
   const addLibrary = (e: FormEvent) => {
     e.preventDefault();
@@ -122,17 +137,7 @@ export function App() {
           />
           <button type="submit" className="rounded bg-sky-600 px-2 py-1 hover:bg-sky-500">Add</button>
         </form>
-        <input
-          aria-label="Extension"
-          placeholder="ext"
-          list="known-exts"
-          className="w-20 rounded bg-neutral-800 px-2 py-1"
-          value={ext}
-          onChange={(e) => setExt(e.target.value)}
-        />
-        <datalist id="known-exts">
-          {knownExts.map((x) => <option key={x} value={x} />)}
-        </datalist>
+        <Combobox label="Extension" allLabel="All types" value={ext} options={extOptions} onChange={setExt} freeText className="w-24" />
         <input
           aria-label="Search"
           type="search"
@@ -149,13 +154,7 @@ export function App() {
         >
           ★ Favourites
         </button>
-        <select aria-label="Tag" className="rounded bg-neutral-800 px-2 py-1" value={tag} onChange={(e) => setTag(e.target.value)}>
-          <option value="">All tags</option>
-          {tag && !tags.some((t) => t.tag === tag) && <option value={tag}>{tag} (0)</option>}
-          {tags.map((t) => (
-            <option key={t.tag} value={t.tag}>{t.tag} ({t.count})</option>
-          ))}
-        </select>
+        <Combobox label="Tag" allLabel="All tags" value={tag} options={tagOptions} onChange={setTag} />
         {bridges.filter((b) => !b.installed).map((b) => (
           <button
             key={b.app_id}
@@ -174,12 +173,21 @@ export function App() {
         </span>
         <UpdateNotice />
       </header>
+      {appsLoaded && !hasBlender(apps) && <BlenderBanner assets={page.items} onApps={appsChanged} />}
       {shownError && (
         <div role="alert" className="mx-4 mt-3 rounded bg-red-950 px-3 py-2 text-sm text-red-300">{shownError}</div>
       )}
       <main className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-3 p-4">
         {page.items.map((a) => (
-          <AssetCard key={a.id} asset={a} apps={apps} onEdit={editAsset} onHoverStart={hover.enter} onHoverEnd={hover.leave} />
+          <AssetCard
+            key={a.id}
+            asset={a}
+            apps={apps}
+            onEdit={editAsset}
+            onHoverStart={hover.enter}
+            onHoverEnd={hover.leave}
+            arming={hover.armed === a.id}
+          />
         ))}
       </main>
       <div ref={sentinel} aria-hidden className="h-px" />

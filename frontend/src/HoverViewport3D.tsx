@@ -20,6 +20,26 @@ export type Proxy3D = {
 
 export const PARSE_TIMEOUT_MS = 30_000;
 
+type Box = { left: number; top: number; width: number; height: number };
+const POPUP_SCALE = 1.6;
+const POPUP_MIN = 360;
+const POPUP_MAX = 560;
+const POPUP_MARGIN = 8;
+
+export function popupRect(card: Box, aspect: number, viewW: number, viewH: number): Box {
+  const room = Math.min(viewW - 2 * POPUP_MARGIN, (viewH - 2 * POPUP_MARGIN) / aspect);
+  const width = Math.min(Math.max(card.width * POPUP_SCALE, POPUP_MIN), POPUP_MAX, room);
+  const height = width * aspect;
+  const clamp = (v: number, size: number, view: number) =>
+    Math.max(POPUP_MARGIN, Math.min(v, view - POPUP_MARGIN - size));
+  return {
+    left: clamp(card.left + (card.width - width) / 2, width, viewW),
+    top: clamp(card.top + (card.height - height) / 2, height, viewH),
+    width,
+    height,
+  };
+}
+
 export function prepareProxy(root: Object3D): Proxy3D {
   const meshes: Proxy3D["meshes"] = [];
   let triangles = 0;
@@ -124,7 +144,11 @@ export function HoverViewport3D({
   const [clay, setClay] = useState(false);
   const { asset, el, signal } = preview;
   const url = proxyUrl(asset);
-  const rect = useMemo(() => (el.querySelector("[data-thumb]") ?? el).getBoundingClientRect(), [el]);
+  const rect = useMemo(() => {
+    const thumb = (el.querySelector("[data-thumb]") ?? el).getBoundingClientRect();
+    const view = document.documentElement;
+    return popupRect(el.getBoundingClientRect(), thumb.height / thumb.width || 1, view.clientWidth, view.clientHeight);
+  }, [el]);
 
   useEffect(() => {
     let loaded: Proxy3D | null = null;
@@ -166,11 +190,12 @@ export function HoverViewport3D({
   return (
     <div
       {...{ [VIEWPORT_ATTR]: "" }}
-      className="fixed z-50 overflow-hidden rounded-md bg-neutral-900 shadow-2xl ring-1 ring-sky-500"
-      style={{ left: rect.left, top: rect.top, width: rect.width, height: rect.height }}
+      className="fixed z-[60] overflow-hidden rounded-lg bg-neutral-900 shadow-2xl shadow-black/70 ring-1 ring-sky-500 transition-[scale,opacity] duration-150 ease-out starting:scale-[0.92] starting:opacity-0 motion-reduce:transition-none"
+      style={rect}
       onPointerLeave={(e) => onLeave(e.relatedTarget)}
     >
-      <Canvas camera={{ fov: 45 }} dpr={[1, 2]}>
+      {/* offsetSize: the pop-in scale must not shrink the measured canvas size. */}
+      <Canvas camera={{ fov: 45 }} dpr={[1, 2]} resize={{ offsetSize: true }}>
         <hemisphereLight args={[0xffffff, 0x444444, 1.2]} />
         <directionalLight position={[3, 5, 4]} intensity={2} />
         {proxy && <primitive object={proxy.root} dispose={null} />}

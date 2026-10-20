@@ -1,1 +1,6 @@
 @import "tailwindcss";
+
+@keyframes dam-hover-fill {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
