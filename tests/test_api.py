@@ -31,6 +31,7 @@ from conftest import (
 
 from backend import dcc
 from backend.indexer import EXTS
+from backend.worker import BLENDER_MISSING
 
 DOC_ROUTES = {"/openapi.json", "/docs", "/docs/oauth2-redirect", "/redoc"}
 
@@ -285,7 +286,7 @@ def test_no_blender_marks_failed(daemon, lib, monkeypatch):
         drain(app, c)
         got = by_name(c)
     for name in ("a.blend", "m.obj", "p.blend"):
-        assert got[name]["status"] == "failed" and "Blender" in got[name]["error"]
+        assert (got[name]["status"], got[name]["error"]) == ("failed", BLENDER_MISSING)
     assert got["p.blend"]["has_thumbnail"] is True
 
 

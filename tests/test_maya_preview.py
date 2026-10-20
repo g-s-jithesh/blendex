@@ -26,6 +26,7 @@ from conftest import (
 )
 
 from backend import bridge, dcc
+from backend.worker import MAYA_MISSING
 
 FAKE_MAYAPY = Path(__file__).resolve().parent / "fake_mayapy.py"
 TMP_FBX = re.compile(r"\d+\.[0-9a-f]{8}\.tmp\.fbx")
@@ -116,7 +117,7 @@ def test_no_maya_fails_maya_assets_only(daemon, lib, maya_log, spawn_log, monkey
         drain(app, c)
         got = by_name(c)
     for name in ("cube.mb", "rig.ma"):
-        assert (got[name]["status"], got[name]["error"]) == ("failed", "Maya not found; install Maya or set DAM_MAYAPY")
+        assert (got[name]["status"], got[name]["error"]) == ("failed", MAYA_MISSING)
     assert got["m.obj"]["status"] == "ready"
     assert maya_runs(maya_log) == [] and [n for n, _ in spawned(spawn_log)] == ["m.obj"]
 

@@ -243,6 +243,7 @@ def daemon(tmp_path, monkeypatch, spawn_log):
     platform = sys.platform if sys.platform in dcc.CANDIDATES else "linux"
     monkeypatch.setitem(dcc.CANDIDATES, platform, [])
     monkeypatch.setattr(dcc, "shutil", SimpleNamespace(which=lambda _: None))
+    monkeypatch.setattr(dcc, "windows_sources", list)
     monkeypatch.setattr(indexer, "DEBOUNCE", 0.2)
     monkeypatch.setenv("DAM_BLENDER", str(FAKE))
     monkeypatch.setenv("DAM_WORKERS", "2")

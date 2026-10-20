@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import subprocess
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -12,7 +13,7 @@ from starlette.exceptions import HTTPException
 
 from . import bridge, db, dcc
 from .indexer import CONVERTIBLE, PROXY_EXTS, Indexer
-from .worker import Worker
+from .worker import Worker, mayapy_command
 
 VERSION = "1.3.0"
 
@@ -24,6 +25,10 @@ class ApiError(Exception):
 
 class LibraryCreate(BaseModel):
     path: str = Field(min_length=1)
+
+
+class AppCreate(BaseModel):
+    executable: str = Field(min_length=1)
 
 
 class LaunchRequest(BaseModel):
@@ -58,9 +63,23 @@ def _error(status: int, code: str, message: str) -> JSONResponse:
     return JSONResponse({"error": {"code": code, "message": message}}, status_code=status)
 
 
+async def refresh_apps(app: FastAPI) -> list[dict]:
+    conn = app.state.conn
+    apps = await asyncio.to_thread(dcc.detect_apps, db.list_custom_apps(conn))
+    with conn:
+        db.replace_apps(conn, apps)
+        repended = [*(db.repend_missing_app(conn, "Blender not found") if dcc.blender_command(conn) else []),
+                    *(db.repend_missing_app(conn, "Maya not found") if mayapy_command(conn) else [])]
+    for asset_id in repended:
+        app.state.publish("asset.updated", db.get_asset(conn, asset_id))
+    return db.list_apps(conn)
+
+
 def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAPI:
     @asynccontextmanager
     async def lifespan(app: FastAPI):
+        logging.basicConfig(format="%(asctime)s %(levelname)s %(name)s: %(message)s")
+        logging.getLogger("backend").setLevel(logging.INFO)
         s = app.state
         s.conn = db.connect(db_path or db.default_db_path())
         s.clients = set()
@@ -82,8 +101,7 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
                 await asyncio.sleep(0.05)
 
         s.idle = idle
-        with s.conn:
-            db.replace_apps(s.conn, dcc.detect_apps())
+        await refresh_apps(app)
         s.worker.start()
         for lib in db.list_libraries(s.conn):
             s.indexer.start(lib)
@@ -241,6 +259,20 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
     @app.get("/api/apps")
     async def list_apps() -> list[dict]:
         return db.list_apps(app.state.conn)
+
+    @app.post("/api/apps", status_code=201)
+    async def add_app(body: AppCreate) -> dict:
+        try:
+            exe = (await asyncio.to_thread(dcc.custom_executable, body.executable)).as_posix()
+        except ValueError as e:
+            raise ApiError(422, "INVALID_PATH", str(e)) from e
+        with app.state.conn:
+            db.add_custom_app(app.state.conn, exe)
+        return next(a for a in await refresh_apps(app) if a["executable"] == exe)
+
+    @app.post("/api/apps/rescan")
+    async def rescan_apps() -> list[dict]:
+        return await refresh_apps(app)
 
     @app.post("/api/launch", status_code=202)
     async def launch(body: LaunchRequest) -> Response:

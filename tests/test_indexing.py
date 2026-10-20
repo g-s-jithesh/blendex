@@ -11,7 +11,7 @@ from conftest import add_library, blend, by_name, drain, items, preview_blend, s
 
 from backend import db
 
-TABLES = {"libraries", "assets", "versions", "dcc_apps", "asset_tags"}
+TABLES = {"libraries", "assets", "versions", "dcc_apps", "asset_tags", "custom_apps"}
 
 
 def write(path, data: bytes, mtime: int | None = None):
@@ -38,7 +38,7 @@ def current_vid(dbfile, asset_id: int) -> int:
 def test_migration_user_version_strict_and_pragmas(tmp_path):
     path = str(tmp_path / "m.sqlite")
     conn = db.connect(path)
-    assert conn.execute("PRAGMA user_version").fetchone() == (2,)
+    assert conn.execute("PRAGMA user_version").fetchone() == (3,)
     assert conn.execute("PRAGMA foreign_keys").fetchone() == (1,)
     assert conn.execute("PRAGMA journal_mode").fetchone() == ("wal",)
     assert conn.execute("PRAGMA busy_timeout").fetchone() == (5000,)
@@ -50,7 +50,7 @@ def test_migration_user_version_strict_and_pragmas(tmp_path):
         conn.execute("INSERT INTO dcc_apps (id, name, executable, exts) VALUES ('a', 'A', 'a.exe', 'not json')")
     conn.close()
     conn = db.connect(path)
-    assert conn.execute("PRAGMA user_version").fetchone() == (2,)
+    assert conn.execute("PRAGMA user_version").fetchone() == (3,)
     conn.close()
 
 

@@ -22,6 +22,8 @@ SCRIPT = SCRIPTS / "blender_export_proxy.py"
 MAYA_SCRIPT = SCRIPTS / "maya_export_fbx.py"
 MAYA_EXTS = {"ma", "mb"}
 REPLACE_RETRY_DELAYS = (0.05, 0.1, 0.2, 0.4, 0.8)
+BLENDER_MISSING = 'Blender not found. Set its path with "Set Blender path" in the header, or install Blender 4.2+.'
+MAYA_MISSING = 'Maya not found. Add maya.exe with "Set app path" in the header, or set DAM_MAYAPY.'
 log = logging.getLogger(__name__)
 
 
@@ -252,9 +254,9 @@ class Worker:
         cmd = dcc.blender_command(self.conn)
         maya_cmd = mayapy_command(self.conn) if asset["ext"] in MAYA_EXTS else None
         if not cmd:
-            return self._fail(asset_id, vid, "Blender not found; install Blender or set DAM_BLENDER")
+            return self._fail(asset_id, vid, BLENDER_MISSING)
         if asset["ext"] in MAYA_EXTS and not maya_cmd:
-            return self._fail(asset_id, vid, "Maya not found; install Maya or set DAM_MAYAPY")
+            return self._fail(asset_id, vid, MAYA_MISSING)
         db.set_status(self.conn, vid, "converting")
         self._emit("conversion.started", asset_id)
         full = asset["ext"] in PROXY_EXTS
