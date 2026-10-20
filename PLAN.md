@@ -101,7 +101,7 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 | T39 | 8 | frontend-coder | File-type and tag filters become comboboxes: click selects the text and lists every option, typing narrows the list, Enter/click applies, Esc/× clears. "Blender not found" banner with a path field + Rescan | vitest + Playwright | done |
 | T40 | 8 | frontend-coder | Hover: after 300 ms a bar at the card's bottom fills until the preview opens at 2000 ms; the preview pops up larger than the card (centred on it, clamped to the window, neighbours stay put and are covered) | vitest + Playwright | done |
 | T41 | 8 | general-purpose | Drag a card out of the desktop app into Blender or Maya: a native file drag of the real path (WinForms `DoDragDrop` on Windows, `QDrag` on Linux) started from the card's dragstart through the pywebview JS API | Real drop into Blender 5.2 and Maya 2027 on this PC | done |
-| T42 | 8 | orchestrator | Release v1.4.0 | release workflow green, both files attached | todo |
+| T42 | 8 | orchestrator | Release v1.4.0 | release workflow green, both files attached | done |
 
 ## Decisions
 
@@ -207,3 +207,4 @@ Owner: `architect`. Other agents edit only the **Status** column of their own ta
 - 2026-10-21 [backend-coder] T38 done: Windows detection sources (drives, Steam, .blend association, uninstall, Maya registry, WindowsApps, Scoop) + logging; `--version` on Windows; `custom_apps` (003) + `POST /apps` + `POST /apps/rescan`; not-found failures re-pend once the app appears; new missing-app texts. Open-with picker unchanged (see report). Files: backend/{dcc,app,db,worker}.py, backend/migrations/003_custom_apps.sql, docs/api_spec.json, CLAUDE.md, tests/{test_app_detection,conftest,test_api,test_bridge,test_favorites_tags,test_indexing,test_maya_preview}.py. Verify: .venv/Scripts/python -m pytest -q -m "not blender"
 - 2026-10-21 [frontend-coder] T39/T40 done (#29): shared Combobox for type/tag filters, Blender-not-found banner, hover bar 300→2000 ms, popup 1.6× card width clamped to the window; vitest 50/50, Playwright incl. 125/150 % device scale.
 - 2026-10-21 [general-purpose] T41 done (#28): drag-out via the launcher's pywebview JS API (WinForms DoDragDrop / QDrag of the real path); verified by real mouse drags into Blender 5.2.2 (obj/fbx/blend) and Maya 2027.2 (obj/fbx/ma).
+- 2026-10-21 [orchestrator] Release v1.4.0: Blender/Maya found anywhere + Set Blender path / Rescan, drag cards into Blender/Maya, clickable filters, hover load bar + bigger pop-up preview, Open with picker in front (#28-#30). Local smoke test of the built app: detection log, .mb + .obj convert to ready, POST /apps 201/422, rescan, clean close.

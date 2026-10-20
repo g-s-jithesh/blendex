@@ -15,7 +15,7 @@ from . import bridge, db, dcc
 from .indexer import CONVERTIBLE, PROXY_EXTS, Indexer
 from .worker import Worker, mayapy_command
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 
 
 class ApiError(Exception):
