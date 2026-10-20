@@ -457,6 +457,35 @@
             }
           }
         }
+      },
+      "post": {
+        "operationId": "addApp",
+        "description": "Adds a Blender or Maya the detection missed. `executable` is the executable or the folder holding blender.exe / maya.exe (or bin/maya.exe); blender-launcher.exe maps to blender.exe beside it. It must exist and be named blender* or maya (case-insensitive, .exe on Windows); a Blender must print `Blender X.Y` for `--version`. Stored in `custom_apps`, then detection re-runs (custom paths first, newest first, so they win an id clash) and replaces the app list. Re-adding the same path is idempotent and also returns 201. Assets that failed with \"Blender not found...\" / \"Maya not found...\" go back to `pending` (`asset.updated`) once that app is detected.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AppCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The added app",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/App"
+                }
+              }
+            }
+          },
+          "422": {
+            "$ref": "#/components/responses/Invalid"
+          }
+        }
       }
     },
     "/launch": {
@@ -607,6 +636,27 @@
           },
           "502": {
             "$ref": "#/components/responses/BridgeFailed"
+          }
+        }
+      }
+    },
+    "/apps/rescan": {
+      "post": {
+        "operationId": "rescanApps",
+        "description": "Re-runs detection (all sources plus `custom_apps`) and replaces the app list. Can take a few seconds (`blender --version` for paths without a version). Re-pends \"not found\" failures like POST /apps.",
+        "responses": {
+          "200": {
+            "description": "Detected DCC executables",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/App"
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -1132,6 +1182,19 @@
           },
           "data": {
             "$ref": "#/components/schemas/QueueState"
+          }
+        }
+      },
+      "AppCreate": {
+        "type": "object",
+        "required": [
+          "executable"
+        ],
+        "properties": {
+          "executable": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Absolute path of blender.exe / maya.exe or its folder"
           }
         }
       }

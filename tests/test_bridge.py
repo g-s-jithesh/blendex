@@ -172,6 +172,7 @@ def detect(monkeypatch, platform, candidates=(), tools=None, run=None):
     monkeypatch.setattr(dcc, "sys", SimpleNamespace(platform=platform, executable=sys.executable))
     monkeypatch.setitem(dcc.CANDIDATES, platform, [str(c) for c in candidates])
     monkeypatch.setattr(dcc, "shutil", SimpleNamespace(which=(tools or {}).get))
+    monkeypatch.setattr(dcc, "windows_sources", list)
     calls = []
 
     def fake_run(args, **kw):
@@ -181,7 +182,8 @@ def detect(monkeypatch, platform, candidates=(), tools=None, run=None):
         return SimpleNamespace(stdout=run or "")
 
     monkeypatch.setattr(dcc, "subprocess", SimpleNamespace(run=fake_run, DEVNULL=subprocess.DEVNULL,
-                                                           SubprocessError=subprocess.SubprocessError))
+                                                           SubprocessError=subprocess.SubprocessError,
+                                                           CREATE_NO_WINDOW=0x08000000))
     return dcc.detect_apps(), calls
 
 
@@ -244,15 +246,17 @@ def test_linux_reads_blender_version_from_cli(monkeypatch, tmp_path, out, versio
     apps, calls = detect(monkeypatch, "linux", [exe], tools={"blender": str(exe)}, run=out)
     assert [(a["id"], a["version"]) for a in apps] == [(f"blender-{version}" if version else "blender", version)]
     assert calls == [([str(exe.resolve()), "--version"], {"check": False, "stdin": subprocess.DEVNULL,
-                      "capture_output": True, "text": True, "errors": "replace", "timeout": 10})]
+                      "capture_output": True, "text": True, "errors": "replace", "timeout": 10,
+                      **({"creationflags": 0x08000000} if os.name == "nt" else {})})]
 
 
-@pytest.mark.parametrize("platform, name", [("linux", "blender-4.5.1-linux-x64"), ("win32", "Blender")])
-def test_cli_version_only_when_the_path_has_none_and_not_on_windows(monkeypatch, tmp_path, platform, name):
-    exe = write(tmp_path / name / "blender", b"")
-    apps, calls = detect(monkeypatch, platform, [exe], run="Blender 9.9.0\n")
-    assert calls == []
-    assert [a["id"] for a in apps if a["id"].startswith("blender")] == ["blender-4.5" if "4.5" in name else "blender"]
+@pytest.mark.parametrize("platform", ["linux", "win32"])
+def test_cli_version_only_when_the_path_has_none(monkeypatch, tmp_path, platform):
+    versioned = write(tmp_path / "blender-4.5.1-linux-x64" / "blender", b"")
+    plain = write(tmp_path / "Blender" / "blender", b"")
+    apps, calls = detect(monkeypatch, platform, [versioned, plain], run="Blender 9.9.0\n")
+    assert [c[0] for c in calls] == [[str(plain.resolve()), "--version"]]
+    assert [a["id"] for a in apps if a["id"].startswith("blender")] == ["blender-4.5", "blender-9.9"]
 
 
 def test_snap_symlink_keeps_its_own_path(monkeypatch, tmp_path):

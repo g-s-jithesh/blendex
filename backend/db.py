@@ -207,3 +207,21 @@ def list_apps(conn: sqlite3.Connection) -> list[dict]:
 
 def get_app(conn: sqlite3.Connection, app_id: str) -> dict | None:
     return next((a for a in list_apps(conn) if a["id"] == app_id), None)
+
+
+def list_custom_apps(conn: sqlite3.Connection) -> list[str]:
+    return [r[0] for r in conn.execute("SELECT executable FROM custom_apps ORDER BY rowid DESC")]
+
+
+def add_custom_app(conn: sqlite3.Connection, executable: str) -> None:
+    conn.execute("INSERT OR REPLACE INTO custom_apps (executable) VALUES (?)", (executable,))
+
+
+def repend_missing_app(conn: sqlite3.Connection, prefix: str) -> list[int]:
+    rows = conn.execute(
+        "UPDATE versions SET status = 'pending', error = NULL WHERE status = 'failed'"
+        " AND substr(error, 1, length(?)) = ? AND id IN (SELECT current_version_id FROM assets)"
+        " RETURNING (SELECT id FROM assets WHERE current_version_id = versions.id)",
+        (prefix, prefix),
+    )
+    return [r[0] for r in rows]
