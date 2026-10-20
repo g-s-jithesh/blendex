@@ -1,7 +1,9 @@
-import { act, renderHook } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, renderHook, screen } from "@testing-library/react";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import type { Asset } from "../../frontend/src/api";
-import { HOVER_DELAY_MS, useHoverPreview } from "../../frontend/src/useHoverPreview";
+import { AssetCard, HOVER_BAR_CLASS } from "../../frontend/src/AssetCard";
+import { popupRect } from "../../frontend/src/HoverViewport3D";
+import { HOVER_BAR_DELAY_MS, HOVER_DELAY_MS, useHoverPreview } from "../../frontend/src/useHoverPreview";
 
 const asset = (id: number, has_proxy = true): Asset => ({
   id, library_id: 1, path: `/l/a${id}.blend`, name: `a${id}`, ext: "blend", size: 1, mtime: 1,
@@ -24,6 +26,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  cleanup();
   vi.useRealTimers();
   document.body.innerHTML = "";
 });
@@ -178,4 +181,56 @@ test("rapid enter/leave over 20 assets leaves zero pending timers and no preview
   expect(h.active()).toBeNull();
   expect(signals.length).toBeGreaterThanOrEqual(100);
   expect(signals.every((s) => s.aborted)).toBe(true);
+});
+
+function CardHarness({ a }: { a: Asset }) {
+  const h = useHoverPreview();
+  return (
+    <>
+      <AssetCard asset={a} apps={[]} onEdit={() => {}} onHoverStart={h.enter} onHoverEnd={h.leave} arming={h.armed === a.id} />
+      {h.active && <div data-testid="preview" />}
+    </>
+  );
+}
+
+const bar = () => document.querySelector<HTMLElement>("[data-hover-bar]");
+const cardEl = (id: number) => document.querySelector<HTMLElement>(`[data-asset-id='${id}']`)!;
+
+test("load bar: armed on enter, fills from 300 ms to exactly 2000 ms, gone once the preview opens", () => {
+  render(<CardHarness a={asset(1)} />);
+  expect(HOVER_BAR_DELAY_MS).toBe(300);
+  expect(HOVER_BAR_CLASS).toContain(`${HOVER_DELAY_MS - HOVER_BAR_DELAY_MS}ms_linear_${HOVER_BAR_DELAY_MS}ms_both`);
+  fireEvent.pointerEnter(cardEl(1));
+  expect(bar()?.className).toContain(HOVER_BAR_CLASS);
+  act(() => vi.advanceTimersByTime(1999));
+  expect(bar()).not.toBeNull();
+  expect(screen.queryByTestId("preview")).toBeNull();
+  act(() => vi.advanceTimersByTime(1));
+  expect(screen.queryByTestId("preview")).not.toBeNull();
+  expect(bar()).toBeNull();
+});
+
+test("load bar: removed on leave; never shown for cards without a proxy", () => {
+  const { unmount } = render(<CardHarness a={asset(1)} />);
+  fireEvent.pointerEnter(cardEl(1));
+  act(() => vi.advanceTimersByTime(800));
+  fireEvent.pointerLeave(cardEl(1), { relatedTarget: document.body });
+  expect(bar()).toBeNull();
+  unmount();
+
+  render(<CardHarness a={asset(2, false)} />);
+  fireEvent.pointerEnter(cardEl(2));
+  act(() => vi.advanceTimersByTime(5000));
+  expect(bar()).toBeNull();
+  expect(screen.queryByTestId("preview")).toBeNull();
+});
+
+test("popup is 1.6x the card (360..560 px), keeps the aspect, centres on the card and stays 8 px inside the view", () => {
+  const card = { left: 500, top: 300, width: 180, height: 280 };
+  expect(popupRect(card, 1, 1920, 1200)).toEqual({ left: 410, top: 260, width: 360, height: 360 });
+  expect(popupRect({ ...card, width: 300 }, 0.75, 1920, 1200)).toMatchObject({ width: 480, height: 360 });
+  expect(popupRect({ ...card, width: 500 }, 1, 1920, 1200).width).toBe(560);
+  expect(popupRect({ left: 0, top: 0, width: 180, height: 280 }, 1, 1920, 1200)).toMatchObject({ left: 8, top: 8 });
+  expect(popupRect({ left: 1800, top: 1000, width: 180, height: 280 }, 1, 1920, 1200)).toMatchObject({ left: 1552, top: 832 });
+  expect(popupRect(card, 1, 300, 1200)).toMatchObject({ left: 8, width: 284, height: 284 });
 });

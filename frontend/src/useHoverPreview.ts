@@ -2,12 +2,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { Asset } from "./api";
 
 export const HOVER_DELAY_MS = 2000;
+export const HOVER_BAR_DELAY_MS = 300;
 export const VIEWPORT_ATTR = "data-hover-viewport";
 
 export type ActivePreview = { asset: Asset; el: HTMLElement; signal: AbortSignal };
 
 export function useHoverPreview(delayMs: number = HOVER_DELAY_MS) {
   const [active, setActive] = useState<ActivePreview | null>(null);
+  const [armed, setArmed] = useState<number | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const controller = useRef<AbortController | null>(null);
   const target = useRef<{ asset: Asset; el: HTMLElement } | null>(null);
@@ -19,6 +21,7 @@ export function useHoverPreview(delayMs: number = HOVER_DELAY_MS) {
     controller.current = null;
     target.current = null;
     setActive(null);
+    setArmed(null);
   }, []);
 
   const enter = useCallback(
@@ -27,10 +30,12 @@ export function useHoverPreview(delayMs: number = HOVER_DELAY_MS) {
       cancel();
       if (!asset.has_proxy) return;
       target.current = { asset, el };
+      setArmed(asset.id);
       timer.current = setTimeout(() => {
         timer.current = undefined;
         const ctrl = new AbortController();
         controller.current = ctrl;
+        setArmed(null);
         setActive({ asset, el, signal: ctrl.signal });
       }, delayMs);
     },
@@ -60,5 +65,5 @@ export function useHoverPreview(delayMs: number = HOVER_DELAY_MS) {
     };
   }, [cancel]);
 
-  return { active, enter, leave };
+  return { active, armed, enter, leave };
 }

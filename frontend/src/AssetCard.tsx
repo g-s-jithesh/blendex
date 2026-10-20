@@ -30,9 +30,13 @@ type Props = {
   onEdit: EditAsset;
   onHoverStart: (asset: Asset, el: HTMLElement) => void;
   onHoverEnd: (related: EventTarget | null) => void;
+  arming?: boolean;
 };
 
-export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverStart, onHoverEnd }: Props) {
+export const HOVER_BAR_CLASS =
+  "animate-[dam-hover-fill_1700ms_linear_300ms_both] motion-reduce:[animation-timing-function:steps(1,jump-start)]";
+
+export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverStart, onHoverEnd, arming = false }: Props) {
   const root = useRef<HTMLDivElement>(null);
   useConvertOnView(root, asset);
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
@@ -73,7 +77,7 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
   return (
     <div
       data-asset-id={asset.id}
-      className="flex flex-col overflow-hidden rounded-md bg-neutral-900 ring-1 ring-neutral-800 [contain-intrinsic-size:auto_180px_auto_280px] [content-visibility:auto] hover:ring-neutral-600"
+      className="relative flex flex-col overflow-hidden rounded-md bg-neutral-900 ring-1 ring-neutral-800 [contain-intrinsic-size:auto_180px_auto_280px] [content-visibility:auto] hover:ring-neutral-600"
       ref={root}
       onPointerEnter={(e) => {
         requestConversion(asset);
@@ -189,6 +193,9 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
           </div>
         )}
       </div>
+      {arming && (
+        <div data-hover-bar aria-hidden className={`pointer-events-none absolute inset-x-0 bottom-0 h-[3px] origin-left bg-sky-400 ${HOVER_BAR_CLASS}`} />
+      )}
     </div>
   );
 });
