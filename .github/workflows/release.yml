@@ -59,6 +59,31 @@ jobs:
           name: Blendex-Setup
           path: release/Blendex-*-Setup.exe
           if-no-files-found: error
+      - id: signing
+        if: github.ref_type == 'tag'
+        shell: bash
+        env:
+          TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+          ORG: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+        run: echo "enabled=$([ -n "$TOKEN" ] && [ -n "$ORG" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+      - name: Sign the installer with SignPath
+        if: steps.signing.outputs.enabled == 'true'
+        uses: signpath/github-action-submit-signing-request@v3
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORGANIZATION_ID }}
+          project-slug: blendex
+          signing-policy-slug: release-signing
+          github-artifact-id: ${{ steps.upload.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: signed
+      - if: steps.signing.outputs.enabled == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: Blendex-Setup
+          path: signed/*.exe
+          if-no-files-found: error
+          overwrite: true
 
   linux:
     name: Build Linux tarball

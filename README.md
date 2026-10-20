@@ -103,7 +103,7 @@ Blendex never modifies or deletes your original files.
 ## Privacy and security
 
 - Blendex only listens on `127.0.0.1` (port 8765), so other computers on your network cannot reach it.
-- The Blender and Maya bridges also listen only on `127.0.0.1`, requires a random per-session token, and accepts only "import this 3D file" requests. It cannot run code sent to it.
+- The Blender and Maya bridges also listen only on `127.0.0.1`, require a random per-session token, and accept only "import this 3D file" requests. They cannot run code sent to them.
 - Blender opens your `.blend` files with embedded scripts disabled while making thumbnails.
 - Maya scene files can contain code, so before Maya opens one for a thumbnail or an import, Blendex refuses `.ma` files containing anything other than the commands Maya itself writes, disables expressions and script nodes, and does not load references (previews therefore show only the scene's own geometry). The thumbnail job also runs with its own Maya preferences folder and without third-party plug-ins. This lowers the risk of downloaded scenes but is not a sandbox: only add libraries you would open in Maya anyway.
 - No telemetry and no network access, apart from Blender and WebView2 themselves, unless you turn on **Check for updates**. That switch is off by default. When it is on, Blendex asks GitHub's public API for the latest release once each time it starts. The request sends nothing about you or your files beyond what any web request carries (your IP address).
@@ -190,6 +190,15 @@ Tests marked `blender` run the real Blender and are skipped if it is not install
 | `tests/` | pytest, Vitest and Playwright suites |
 
 `CLAUDE.md` describes the API contract and project rules in detail, and `PLAN.md` records decisions and progress.
+
+## Code signing policy
+
+Windows releases are being set up for free code signing by [SignPath.io](https://about.signpath.io/), with a certificate by the [SignPath Foundation](https://signpath.org/). Until that is approved, the installer is unsigned and SmartScreen asks you to confirm (**More info → Run anyway**).
+
+- Only installers built by this repository's [release workflow](.github/workflows/release.yml) from a version tag are signed. Nothing built on a personal machine is.
+- Committers and reviewers: [g-s-jithesh](https://github.com/g-s-jithesh) and the [contributors](https://github.com/g-s-jithesh/blendex/graphs/contributors) whose pull requests are reviewed and merged by a maintainer.
+- Approvers (each signing request is approved by hand): [g-s-jithesh](https://github.com/g-s-jithesh).
+- Privacy: this program will not transfer any information to other networked systems unless specifically requested by the user or the person installing or operating it. The only network request Blendex makes itself is the opt-in update check described under [Privacy and security](#privacy-and-security).
 
 ## Contributing
 
