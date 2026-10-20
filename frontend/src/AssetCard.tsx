@@ -1,6 +1,7 @@
 import { memo, useRef, useState } from "react";
 import { api, errorText, thumbnailUrl, type App, type Asset, type AssetStatus, type Session } from "./api";
 import { requestConversion, useConvertOnView } from "./convertOnView";
+import { DRAG_HINT, dragOut, useDragOut } from "./dragOut";
 import { normalizeTag } from "./useAssets";
 
 const STATUS_LABEL: Record<AssetStatus, string> = {
@@ -37,6 +38,7 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
   const [note, setNote] = useState<{ text: string; error: boolean } | null>(null);
   const [tagInput, setTagInput] = useState("");
   const [sessions, setSessions] = useState<Session[]>([]);
+  const draggable = useDragOut();
   const openers = apps.filter((a) => a.exts.includes(asset.ext));
   const importers = sessions.filter((s) => s.exts.includes(asset.ext));
   const refreshSessions = () => {
@@ -79,7 +81,16 @@ export const AssetCard = memo(function AssetCard({ asset, apps, onEdit, onHoverS
       }}
       onPointerLeave={(e) => onHoverEnd(e.relatedTarget)}
     >
-      <div data-thumb className="relative aspect-square bg-neutral-800">
+      <div
+        data-thumb
+        className="relative aspect-square bg-neutral-800"
+        draggable={draggable}
+        title={draggable ? DRAG_HINT : undefined}
+        onDragStart={(e) => {
+          onHoverEnd(null);
+          dragOut(e, asset.id, (text) => setNote({ text, error: true }));
+        }}
+      >
         {asset.has_thumbnail ? (
           <img
             src={thumbnailUrl(asset)}

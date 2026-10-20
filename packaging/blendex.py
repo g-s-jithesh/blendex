@@ -1,4 +1,5 @@
 import ctypes
+import functools
 import json
 import os
 import shutil
@@ -8,6 +9,7 @@ import sys
 import threading
 import time
 import traceback
+import urllib.error
 import urllib.request
 from pathlib import Path
 
@@ -91,9 +93,66 @@ def claim_port() -> socket.socket | None:
     return sock
 
 
+def asset_file(asset_id: object) -> str:
+    if type(asset_id) is not int:
+        raise LookupError("invalid asset id")
+    try:
+        with urllib.request.urlopen(f"{URL}api/assets/{asset_id}", timeout=10) as r:
+            path = os.path.normpath(json.load(r)["path"])
+    except urllib.error.HTTPError as e:
+        raise LookupError("asset not found") from e
+    if not os.path.isfile(path):
+        raise LookupError(f"file not found: {path}")
+    return path
+
+
+def native_drag(window: webview.Window, path: str) -> None:
+    if WINDOWS:
+        from System import Action, Array, String
+        from System.Windows.Forms import DataFormats, DataObject, DragDropEffects
+
+        form = window.native
+        files = DataObject(DataFormats.FileDrop, Array[String]([path]))
+        form.Invoke(Action(lambda: form.DoDragDrop(files, DragDropEffects.Copy | DragDropEffects.Link)))
+        return
+    qt_dragger().start.emit(window.native, path)
+
+
+@functools.cache
+def qt_dragger() -> object:
+    from qtpy.QtCore import QMimeData, QObject, QUrl, Signal
+    from qtpy.QtGui import QDrag
+    from qtpy.QtWidgets import QApplication
+
+    class Dragger(QObject):
+        start = Signal(object, str)
+
+        def drag(self, source: object, path: str) -> None:
+            mime = QMimeData()
+            mime.setUrls([QUrl.fromLocalFile(path)])
+            files = QDrag(source)
+            files.setMimeData(mime)
+            files.exec()
+
+    dragger = Dragger()
+    # Created on the JS bridge thread; QDrag must run on the GUI thread, so the queued signal hops there.
+    dragger.moveToThread(QApplication.instance().thread())
+    dragger.start.connect(dragger.drag)
+    return dragger
+
+
+class DesktopApi:
+    def drag_asset(self, asset_id: object) -> str | None:
+        try:
+            native_drag(webview.windows[0], asset_file(asset_id))
+        except (LookupError, OSError) as e:
+            return str(e)
+        return None
+
+
 def serve(sock: socket.socket) -> None:
     window = webview.create_window(TITLE, html=LOADING, width=1440, height=900, min_size=(800, 560),
-                                   background_color=BACKGROUND)
+                                   background_color=BACKGROUND, js_api=DesktopApi())
     running: list = []
     failed: list[Exception] = []
 
