@@ -28,21 +28,21 @@ body:
     attributes:
       label: Blendex version
       description: Settings → Apps shows it, or the release you installed.
-      placeholder: "1.2.0"
+      placeholder: "1.3.0"
     validations:
       required: true
   - type: input
-    id: windows
+    id: os
     attributes:
-      label: Windows version
-      placeholder: "Windows 11 24H2"
+      label: Operating system
+      placeholder: "Windows 11 24H2, or Ubuntu 24.04 (Wayland)"
     validations:
       required: true
   - type: input
     id: blender
     attributes:
-      label: Blender version(s) installed
-      placeholder: "5.2.2 LTS"
+      label: Blender / Maya version(s) installed
+      placeholder: "Blender 5.2.2 LTS, Maya 2027"
   - type: dropdown
     id: filetype
     attributes:
@@ -53,7 +53,7 @@ body:
     id: log
     attributes:
       label: Log
-      description: The last lines of `%APPDATA%\dam\blendex.log`, if any.
+      description: The last lines of `%APPDATA%\dam\blendex.log` (Linux: `~/.local/share/dam/blendex.log`), if any.
       render: text
   - type: textarea
     id: extra
