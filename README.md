@@ -4,11 +4,13 @@
 [![Latest release](https://img.shields.io/github/v/release/g-s-jithesh/blendex)](https://github.com/g-s-jithesh/blendex/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-A lightweight 3D asset manager for Windows. Point it at your project folders and it indexes your `.blend`, `.obj`, `.fbx`, `.glb`, `.stl`, `.usd` and other 3D files, shows a thumbnail for each, lets you orbit a 3D preview by hovering a card for 2 seconds, and opens or imports assets into Blender, including straight into the Blender project you already have open.
+A lightweight 3D asset manager for Windows and Linux. Point it at your project folders and it indexes your `.blend`, `.obj`, `.fbx`, `.ma`/`.mb`, `.glb`, `.stl`, `.usd` and other 3D files, shows a thumbnail for each, lets you orbit a 3D preview by hovering a card for 2 seconds, and gets assets into Blender or Maya: open them, import them into the scene you already have open, or just drag a card onto the app.
 
 Everything runs on your own PC. Nothing is uploaded anywhere, and Blendex stays offline unless you turn on update checks.
 
-![Blendex showing a .blend thumbnail and a live 3D preview of an .obj](docs/screenshot.png)
+[![Blendex: hover a card to orbit the model in 3D, then drag it into Blender](docs/demo.gif)](docs/blendex-demo.mp4)
+
+<sub>▶ [Watch the full video](docs/blendex-demo.mp4) (with sound).</sub>
 
 ## Install
 
