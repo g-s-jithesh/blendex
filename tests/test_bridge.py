@@ -165,7 +165,7 @@ def test_launch_commands():
     explorer = dcc.launch_command({"id": "explorer", "executable": "C:/WINDOWS/explorer.exe"}, "C:/My Lib/a b.obj")
     assert explorer == f'"{Path("C:/WINDOWS/explorer.exe")}" /select,"{native}"'
     picker = dcc.launch_command({"id": "open-with", "executable": "C:/W/System32/rundll32.exe"}, "C:/My Lib/a b.obj")
-    assert picker == f'"{Path("C:/W/System32/rundll32.exe")}" shell32.dll,OpenAs_RunDLL {native}'
+    assert picker == f'"{Path("C:/W/System32/rundll32.exe")}" shell32.dll,OpenAs_RunDLL "{native}"'
 
 
 def detect(monkeypatch, platform, candidates=(), tools=None, run=None):

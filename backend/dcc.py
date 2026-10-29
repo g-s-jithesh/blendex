@@ -259,7 +259,7 @@ def launch_command(app: dict, path: str) -> list[str] | str:
     if app["id"] == "explorer":
         return f'"{Path(exe)}" /select,"{native}"'
     if app["id"] == "open-with":
-        return f'"{Path(exe)}" shell32.dll,OpenAs_RunDLL {native}'
+        return f'"{Path(exe)}" shell32.dll,OpenAs_RunDLL "{native}"'
     if app["id"] == "file-manager":
         if dbus := shutil.which("dbus-send"):
             return [dbus, "--session", "--print-reply", "--reply-timeout=5000", "--dest=org.freedesktop.FileManager1",
