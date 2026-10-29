@@ -268,7 +268,8 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
             raise ApiError(422, "INVALID_PATH", str(e)) from e
         with app.state.conn:
             db.add_custom_app(app.state.conn, exe)
-        return next(a for a in await refresh_apps(app) if a["executable"] == exe)
+        all_apps = await refresh_apps(app)
+        return next((a for a in all_apps if a["executable"].lower() == exe.lower()), all_apps[0])
 
     @app.post("/api/apps/rescan")
     async def rescan_apps() -> list[dict]:
