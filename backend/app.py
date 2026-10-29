@@ -114,6 +114,20 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
 
     app = FastAPI(title="3D DAM daemon", version=VERSION, lifespan=lifespan)
 
+    def _check_origin(origin: str | None) -> bool:
+        if not origin:
+            return True
+        from urllib.parse import urlparse
+        host = (urlparse(origin).hostname or "").lower()
+        return host in ("127.0.0.1", "localhost", "testserver")
+
+    @app.middleware("http")
+    async def validate_local_origin(request: Request, call_next):
+        origin = request.headers.get("origin")
+        if not _check_origin(origin):
+            return _error(403, "VALIDATION_ERROR", "forbidden cross-origin request")
+        return await call_next(request)
+
     @app.exception_handler(ApiError)
     async def api_error(_: Request, e: ApiError) -> JSONResponse:
         return _error(e.status, e.code, e.message)
@@ -339,6 +353,10 @@ def create_app(db_path: str | None = None, web_dir: str | None = None) -> FastAP
 
     @app.websocket("/ws/events")
     async def events(ws: WebSocket) -> None:
+        origin = ws.headers.get("origin")
+        if not _check_origin(origin):
+            await ws.close(code=1008)
+            return
         await ws.accept()
         q: asyncio.Queue = asyncio.Queue()
         app.state.clients.add(q)
