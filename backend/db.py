@@ -114,11 +114,16 @@ def current_version_id(conn: sqlite3.Connection, asset_id: int) -> int | None:
     return row[0] if row else None
 
 
+def _under_args(under: str) -> tuple[str, str, str]:
+    prefix = under if under.endswith("/") else under + "/"
+    return (under, prefix, prefix)
+
+
 def snapshot(conn: sqlite3.Connection, library_id: int, under: str) -> dict[str, tuple[int, int]]:
     rows = conn.execute(
         "SELECT a.path, v.size, v.mtime FROM assets a LEFT JOIN versions v ON v.id = a.current_version_id"
         " WHERE a.library_id = ? AND " + UNDER,
-        (library_id, under, under + "/", under + "/"),
+        (library_id, *_under_args(under)),
     )
     return {path: (size, mtime) for path, size, mtime in rows}
 
@@ -146,7 +151,7 @@ def upsert_asset(conn: sqlite3.Connection, library_id: int, path: str, size: int
 
 
 def remove_assets(conn: sqlite3.Connection, under: str) -> list[dict]:
-    args = (under, under + "/", under + "/")
+    args = _under_args(under)
     gone = _assets(conn.execute(ASSET_SQL + " WHERE " + UNDER, args))
     conn.execute("DELETE FROM assets AS a WHERE " + UNDER, args)
     return gone
