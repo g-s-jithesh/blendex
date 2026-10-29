@@ -159,6 +159,14 @@ def test_real_windows_sources_never_raise():
         assert isinstance(find(), list)
 
 
+def test_version_key_handles_non_numeric_and_empty():
+    assert dcc._version_key({"version": "5.2"}) == (5, 2)
+    assert dcc._version_key({"version": "2024.1_Beta"}) == (2024, 1)
+    assert dcc._version_key({"version": "v4.2a"}) == (4, 2)
+    assert dcc._version_key({"version": None}) == (0,)
+    assert dcc._version_key({"version": "unknown"}) == (0,)
+
+
 @pytest.fixture
 def no_cli(monkeypatch):
     versions: dict[str, str] = {}

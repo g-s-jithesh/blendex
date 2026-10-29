@@ -239,7 +239,8 @@ def custom_executable(raw: str) -> Path:
 
 
 def _version_key(app: dict) -> tuple[int, ...]:
-    return tuple(int(x) for x in (app["version"] or "0").split("."))
+    nums = re.findall(r"\d+", app.get("version") or "0")
+    return tuple(int(x) for x in nums) if nums else (0,)
 
 
 def blender_command(conn: sqlite3.Connection) -> list[str] | None:
