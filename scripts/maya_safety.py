@@ -74,8 +74,8 @@ def scan_ma(path: str) -> str | None:
                     pend_slash = True
                     statement = statement[:-1]
                     continue
-                if ch == "`":
-                    return "`"
+                if ch in ("`", "{", "}"):
+                    return ch
                 if ch == '"':
                     in_str = True
                     if first is None and word:
@@ -105,7 +105,9 @@ def _neutralize_expression(node, _data) -> None:
     fn = om.MFnDependencyNode(node)
     try:
         fn.findPlug("nodeState", False).setInt(2)
+        fn.findPlug("nodeState", False).setLocked(True)
         fn.findPlug("ixp", False).setString("")
+        fn.findPlug("ixp", False).setLocked(True)
     except Exception:  # noqa: BLE001, S110
         pass
 
