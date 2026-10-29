@@ -28,7 +28,9 @@ def _scan(f: BinaryIO) -> tuple[int, int, bytes] | None:
     else:
         return None
     used = len(head)
-    while True:
+    chunks = 0
+    while chunks < 10000:
+        chunks += 1
         raw = f.read(bhead.size)
         if len(raw) != bhead.size:
             return None
