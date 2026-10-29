@@ -186,11 +186,13 @@ class Worker:
             return
         if asset["ext"] == "blend":
             vid = db.current_version_id(self.conn, asset_id)
-            lib_path = db.get_library(self.conn, asset["library_id"])["path"]
-            shown = await asyncio.to_thread(write_embedded_preview, asset["path"], lib_path, asset_id)
+            lib = db.get_library(self.conn, asset["library_id"])
+            if not lib:
+                return
+            shown = await asyncio.to_thread(write_embedded_preview, asset["path"], lib["path"], asset_id)
             if shown and db.current_version_id(self.conn, asset_id) == vid:
-                db.set_thumbnail(self.conn, vid)
-                self.conn.commit()
+                with self.conn:
+                    db.set_thumbnail(self.conn, vid)
         if event:
             self.publish(event, db.get_asset(self.conn, asset_id))
         if convert:
@@ -208,9 +210,11 @@ class Worker:
                 await self.convert(asset_id)
             except Exception as e:
                 log.exception("conversion of asset %s crashed", asset_id)
-                self.conn.rollback()
+                with contextlib.suppress(Exception):
+                    self.conn.rollback()
                 if vid := db.current_version_id(self.conn, asset_id):
-                    db.set_status(self.conn, vid, "failed", f"{type(e).__name__}: {e}")
+                    with self.conn:
+                        db.set_status(self.conn, vid, "failed", f"{type(e).__name__}: {e}")
                     self._emit("conversion.failed", asset_id)
             finally:
                 self.active.pop(asset_id, None)
@@ -218,12 +222,12 @@ class Worker:
                 self._changed()
 
     def _emit(self, event: str, asset_id: int) -> None:
-        self.conn.commit()
         self.publish(event, db.get_asset(self.conn, asset_id))
 
     def _fail(self, asset_id: int, vid: int, error: str) -> None:
         if db.current_version_id(self.conn, asset_id) == vid:
-            db.set_status(self.conn, vid, "failed", error)
+            with self.conn:
+                db.set_status(self.conn, vid, "failed", error)
             self._emit("conversion.failed", asset_id)
 
     async def _export_fbx(self, cmd: list[str], src: str, fbx: str, meta_path: str) -> str | None:
@@ -257,10 +261,14 @@ class Worker:
             return self._fail(asset_id, vid, BLENDER_MISSING)
         if asset["ext"] in MAYA_EXTS and not maya_cmd:
             return self._fail(asset_id, vid, MAYA_MISSING)
-        db.set_status(self.conn, vid, "converting")
+        with self.conn:
+            db.set_status(self.conn, vid, "converting")
         self._emit("conversion.started", asset_id)
         full = asset["ext"] in PROXY_EXTS
-        cache = cache_dir(db.get_library(self.conn, asset["library_id"])["path"])
+        lib = db.get_library(self.conn, asset["library_id"])
+        if not lib:
+            return
+        cache = cache_dir(lib["path"])
         tmp = cache / f"{asset_id}.{secrets.token_hex(4)}.tmp"
         glb, png, meta_path = f"{tmp}.glb", f"{tmp}.png", f"{tmp}.json"
         fbx, maya_meta = f"{tmp}.fbx", f"{tmp}.maya.json"
@@ -280,8 +288,9 @@ class Worker:
                 await asyncio.to_thread(replace_retrying, png, cache / f"{asset_id}.png")
                 if full:
                     await asyncio.to_thread(replace_retrying, glb, cache / f"{asset_id}.glb")
-                db.set_result(self.conn, vid, meta.get("poly_count"), meta.get("proxy_poly_count") if full else None,
-                              full)
+                with self.conn:
+                    db.set_result(self.conn, vid, meta.get("poly_count"), meta.get("proxy_poly_count") if full else None,
+                                  full)
                 return self._emit("conversion.done", asset_id)
             self._fail(asset_id, vid, _failure(meta, rc, self.timeout, "proxy script"))
         finally:
